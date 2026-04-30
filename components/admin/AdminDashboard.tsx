@@ -64,6 +64,9 @@ export function AdminDashboard({
 
   const validation = useMemo(() => safeParseAppConfig(config), [config]);
   const previewPreset = useMemo(() => buildPresetWithDefaultOptions(config), [config]);
+  const unusedCustomKeyCount = CUSTOM_KEY_OPTIONS.filter(
+    ([key]) => !config.customOptions.some((option) => option.customKey === key),
+  ).length;
   const preview = useMemo(
     () => calculateVesatot(PREVIEW_ENTRIES, previewPreset, config.defaultLanguage),
     [previewPreset, config.defaultLanguage],
@@ -270,13 +273,19 @@ export function AdminDashboard({
             action={
               <button
                 type="button"
-                onClick={() =>
+                disabled={unusedCustomKeyCount === 0}
+                onClick={() => {
+                  const option = newCustomOption(config.customOptions);
+                  if (!option) {
+                    return;
+                  }
+
                   updateConfig({
                     ...config,
-                    customOptions: [...config.customOptions, newCustomOption(config.customOptions)],
-                  })
-                }
-                className="focus-ring inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700"
+                    customOptions: [...config.customOptions, option],
+                  });
+                }}
+                className="focus-ring inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 transition disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Plus size={14} />
                 Add option
@@ -285,14 +294,22 @@ export function AdminDashboard({
           >
             <div className="mb-4 rounded-2xl border border-cedar/10 bg-cedar/5 p-4 text-sm leading-6 text-slate-600">
               Yom HaChodesh, Haflagah, and Onah Beinonit are always included. Each option below appears
-              as its own on/off switch in the public Settings page after publishing.
+              as its own on/off switch in the public Settings page after publishing. New calculation
+              formulas still need to be added in code first.
             </div>
+            {unusedCustomKeyCount === 0 && (
+              <p className="mb-4 rounded-2xl border border-slate-100 bg-slate-50 p-3 text-sm font-semibold text-slate-600">
+                All available calculation behaviors are already exposed. Edit or delete an existing
+                option to change what appears in Settings.
+              </p>
+            )}
             <div className="grid gap-3">
               {config.customOptions.map((option) => (
                 <CustomOptionEditor
                   key={option.id}
                   option={option}
                   canDelete={config.customOptions.length > 1}
+                  existingOptions={config.customOptions}
                   onDelete={() =>
                     updateConfig({
                       ...config,
@@ -494,14 +511,22 @@ export function AdminDashboard({
 function CustomOptionEditor({
   option,
   canDelete,
+  existingOptions,
   onDelete,
   onChange,
 }: {
   option: CustomOption;
   canDelete: boolean;
+  existingOptions: CustomOption[];
   onDelete: () => void;
   onChange: (option: CustomOption) => void;
 }) {
+  const availableKeys = CUSTOM_KEY_OPTIONS.filter(
+    ([key]) =>
+      key === option.customKey ||
+      !existingOptions.some((existingOption) => existingOption.customKey === key),
+  );
+
   return (
     <div className="space-y-4 rounded-2xl border border-slate-100 bg-slate-50 p-4">
       <div className="grid gap-4 md:grid-cols-[1fr_14rem_auto]">
@@ -519,7 +544,7 @@ function CustomOptionEditor({
             }
             className="focus-ring w-full rounded-2xl border border-slate-200 bg-white px-4 py-3"
           >
-            {CUSTOM_KEY_OPTIONS.map(([key, label]) => (
+            {availableKeys.map(([key, label]) => (
               <option key={key} value={key}>
                 {label}
               </option>
@@ -766,11 +791,14 @@ function buildPresetWithDefaultOptions(config: AppConfig): CalculationPreset {
   };
 }
 
-function newCustomOption(existing: CustomOption[]): CustomOption {
-  const template =
-    DEFAULT_APP_CONFIG.customOptions.find(
-      (option) => !existing.some((existingOption) => existingOption.customKey === option.customKey),
-    ) || DEFAULT_APP_CONFIG.customOptions[2];
+function newCustomOption(existing: CustomOption[]): CustomOption | null {
+  const template = DEFAULT_APP_CONFIG.customOptions.find(
+    (option) => !existing.some((existingOption) => existingOption.customKey === option.customKey),
+  );
+  if (!template) {
+    return null;
+  }
+
   const id = uniqueId(template.id, existing.map((option) => option.id));
 
   return {
