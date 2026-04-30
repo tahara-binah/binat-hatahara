@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  Bell,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
@@ -20,6 +21,7 @@ import type { ActiveConfigResult } from "@/lib/config/repository";
 import type { AppConfig, CalculationPreset, CustomOption, Language, Onah } from "@/lib/config/schema";
 import { direction, text } from "@/lib/i18n";
 import {
+  addDaysToDateOnly,
   assertDateOnly,
   dateOnlyFromHebrewDate,
   dateOnlyToLocalDate,
@@ -40,11 +42,20 @@ import { calculateVesatot, type PeriodEntry, vesetTypeLabel } from "@/lib/veset"
 
 type Tab = "upcoming" | "calendar" | "entries" | "settings";
 type CalendarMode = "gregorian" | "hebrew";
+type AppNotificationPermission = NotificationPermission | "unsupported";
+
+interface ReminderPreferences {
+  enabled: boolean;
+  sameDay: boolean;
+  dayBefore: boolean;
+  time: string;
+}
 
 interface UserPreferences {
   language: Language;
   calendarMode: CalendarMode;
   customOptions: Record<string, boolean>;
+  reminders: ReminderPreferences;
 }
 
 type StoredUserPreferences = Partial<UserPreferences> & {
@@ -60,6 +71,7 @@ interface EntryForm {
 const ENTRY_STORAGE_KEY = "period_entries";
 const PREFERENCES_STORAGE_KEY = "user_preferences";
 const CONFIG_VERSION_STORAGE_KEY = "active_config_version";
+const REMINDER_SENT_STORAGE_KEY = "local_reminders_sent";
 
 export function BinatApp({ initialConfig }: { initialConfig: ActiveConfigResult }) {
   const [configInfo, setConfigInfo] = useState(initialConfig);
@@ -67,6 +79,8 @@ export function BinatApp({ initialConfig }: { initialConfig: ActiveConfigResult 
   const [activeTab, setActiveTab] = useState<Tab>("upcoming");
   const [form, setForm] = useState<EntryForm | null>(null);
   const [localStorageReady, setLocalStorageReady] = useState(false);
+  const [notificationPermission, setNotificationPermission] =
+    useState<AppNotificationPermission>("unsupported");
   const [preferences, setPreferences] = useState<UserPreferences>(() =>
     defaultPreferences(initialConfig.config),
   );
@@ -84,6 +98,21 @@ export function BinatApp({ initialConfig }: { initialConfig: ActiveConfigResult 
     () => calculateVesatot(entries, activePreset, language),
     [entries, activePreset, language],
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    registerServiceWorker();
+
+    queueMicrotask(() => {
+      if (!cancelled && "Notification" in window) {
+        setNotificationPermission(Notification.permission);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -153,6 +182,28 @@ export function BinatApp({ initialConfig }: { initialConfig: ActiveConfigResult 
       isMounted = false;
     };
   }, [configInfo.version]);
+
+  useEffect(() => {
+    maybeShowLocalReminders({
+      calculated,
+      config,
+      language,
+      localStorageReady,
+      reminders: preferences.reminders,
+    });
+  }, [calculated, config, language, localStorageReady, preferences.reminders]);
+
+  async function requestNotificationPermission() {
+    if (!("Notification" in window)) {
+      setNotificationPermission("unsupported");
+      return "unsupported" as const;
+    }
+
+    await registerServiceWorker();
+    const permission = await Notification.requestPermission();
+    setNotificationPermission(permission);
+    return permission;
+  }
 
   function openAdd(date = todayDateOnly()) {
     setForm({ id: null, date, onah: "day" });
@@ -283,6 +334,8 @@ export function BinatApp({ initialConfig }: { initialConfig: ActiveConfigResult 
                 config={config}
                 language={language}
                 preferences={preferences}
+                notificationPermission={notificationPermission}
+                onRequestNotifications={requestNotificationPermission}
                 onPreferencesChange={setPreferences}
               />
             )}
@@ -623,11 +676,15 @@ function SettingsPanel({
   config,
   language,
   preferences,
+  notificationPermission,
+  onRequestNotifications,
   onPreferencesChange,
 }: {
   config: AppConfig;
   language: Language;
   preferences: UserPreferences;
+  notificationPermission: AppNotificationPermission;
+  onRequestNotifications: () => Promise<AppNotificationPermission>;
   onPreferencesChange: (preferences: UserPreferences) => void;
 }) {
   function updateCustomOption(optionId: string, enabled: boolean) {
@@ -637,6 +694,27 @@ function SettingsPanel({
         ...preferences.customOptions,
         [optionId]: enabled,
       },
+    });
+  }
+
+  async function updateReminderPreference(next: ReminderPreferences) {
+    if (next.enabled && notificationPermission !== "granted") {
+      const permission = await onRequestNotifications();
+      if (permission !== "granted") {
+        onPreferencesChange({
+          ...preferences,
+          reminders: {
+            ...next,
+            enabled: false,
+          },
+        });
+        return;
+      }
+    }
+
+    onPreferencesChange({
+      ...preferences,
+      reminders: next,
     });
   }
 
@@ -721,6 +799,82 @@ function SettingsPanel({
         </section>
       )}
 
+      <section className="rounded-2xl border border-slate-100 bg-white p-3 sm:p-4">
+        <div className="mb-3 flex items-center gap-2">
+          <Bell size={18} className="text-cedar" />
+          <h3 className="font-bold text-cedar">
+            {language === "he" ? "תזכורות מקומיות" : "Local Reminders"}
+          </h3>
+        </div>
+        <p className="mb-3 text-xs font-semibold leading-5 text-slate-500">
+          {language === "he"
+            ? "התזכורות נשמרות במכשיר בלבד ונבדקות כשהאפליקציה נפתחת. הן אינן נשלחות לסופאבייס."
+            : "Reminders stay on this device and are checked when the app is opened. They are not sent to Supabase."}
+        </p>
+        {notificationPermission === "unsupported" ? (
+          <p className="rounded-2xl bg-slate-50 p-3 text-sm font-semibold text-slate-500">
+            {language === "he"
+              ? "הדפדפן הזה לא תומך בהתראות PWA."
+              : "This browser does not support PWA notifications."}
+          </p>
+        ) : (
+          <div className="grid gap-2">
+            <ReminderToggle
+              label={language === "he" ? "הפעלת תזכורות" : "Enable reminders"}
+              checked={preferences.reminders.enabled}
+              onChange={(checked) =>
+                updateReminderPreference({ ...preferences.reminders, enabled: checked })
+              }
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <ReminderToggle
+                label={language === "he" ? "ביום עצמו" : "Same day"}
+                checked={preferences.reminders.sameDay}
+                onChange={(checked) =>
+                  updateReminderPreference({ ...preferences.reminders, sameDay: checked })
+                }
+              />
+              <ReminderToggle
+                label={language === "he" ? "יום לפני" : "Day before"}
+                checked={preferences.reminders.dayBefore}
+                onChange={(checked) =>
+                  updateReminderPreference({ ...preferences.reminders, dayBefore: checked })
+                }
+              />
+            </div>
+            <label className="block rounded-2xl border border-slate-100 bg-slate-50 px-3 py-3">
+              <span className="mb-2 block text-sm font-bold text-slate-700">
+                {language === "he" ? "שעת בדיקה" : "Reminder time"}
+              </span>
+              <input
+                type="time"
+                value={preferences.reminders.time}
+                onChange={(event) =>
+                  updateReminderPreference({ ...preferences.reminders, time: event.target.value })
+                }
+                className="focus-ring w-full rounded-xl border border-slate-200 bg-white px-3 py-2"
+              />
+            </label>
+            {notificationPermission === "denied" && (
+              <p className="rounded-2xl bg-berry/10 p-3 text-xs font-semibold leading-5 text-berry">
+                {language === "he"
+                  ? "ההתראות חסומות בדפדפן. יש לפתוח אותן בהגדרות האתר במכשיר."
+                  : "Notifications are blocked in the browser. Enable them in this site’s device settings."}
+              </p>
+            )}
+            {notificationPermission === "default" && preferences.reminders.enabled && (
+              <button
+                type="button"
+                onClick={onRequestNotifications}
+                className="focus-ring rounded-2xl bg-cedar px-4 py-3 text-sm font-bold text-white"
+              >
+                {language === "he" ? "אישור התראות" : "Allow notifications"}
+              </button>
+            )}
+          </div>
+        )}
+      </section>
+
       <div className="grid gap-3 md:grid-cols-2">
         {config.instructions.map((instruction) => (
           <div key={instruction.id} className="rounded-2xl border border-slate-100 bg-white p-3 sm:p-4">
@@ -757,6 +911,28 @@ function CustomOptionToggle({
         checked={checked}
         onChange={(event) => onChange(event.target.checked)}
         className="mt-1 h-5 w-5 shrink-0 accent-cedar"
+      />
+    </label>
+  );
+}
+
+function ReminderToggle({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-3">
+      <span className="text-sm font-bold text-slate-700">{label}</span>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+        className="h-5 w-5 accent-cedar"
       />
     </label>
   );
@@ -979,6 +1155,16 @@ function defaultPreferences(config: AppConfig): UserPreferences {
     language: preferredDefaultLanguage(config),
     calendarMode: defaultCalendarMode(config),
     customOptions: {},
+    reminders: defaultReminderPreferences(),
+  };
+}
+
+function defaultReminderPreferences(): ReminderPreferences {
+  return {
+    enabled: false,
+    sameDay: true,
+    dayBefore: true,
+    time: "09:00",
   };
 }
 
@@ -1012,6 +1198,7 @@ function normalizePreferences(config: AppConfig, preferences: StoredUserPreferen
         ? preferences.calendarMode
         : defaultCalendarMode(config);
   const customOptions: Record<string, boolean> = {};
+  const reminders = normalizeReminderPreferences(preferences.reminders);
   const legacyPreset = preferences.activePresetId
     ? config.presets.find((preset) => preset.id === preferences.activePresetId)
     : null;
@@ -1029,6 +1216,21 @@ function normalizePreferences(config: AppConfig, preferences: StoredUserPreferen
     language,
     calendarMode,
     customOptions,
+    reminders,
+  };
+}
+
+function normalizeReminderPreferences(reminders: Partial<ReminderPreferences> | undefined): ReminderPreferences {
+  const defaults = defaultReminderPreferences();
+  const time = typeof reminders?.time === "string" && /^\d{2}:\d{2}$/.test(reminders.time)
+    ? reminders.time
+    : defaults.time;
+
+  return {
+    enabled: typeof reminders?.enabled === "boolean" ? reminders.enabled : defaults.enabled,
+    sameDay: typeof reminders?.sameDay === "boolean" ? reminders.sameDay : defaults.sameDay,
+    dayBefore: typeof reminders?.dayBefore === "boolean" ? reminders.dayBefore : defaults.dayBefore,
+    time,
   };
 }
 
@@ -1088,4 +1290,101 @@ function safeWriteString(key: string, value: string) {
   } catch {
     // Local storage can be unavailable in restricted browser modes.
   }
+}
+
+async function registerServiceWorker() {
+  if (!("serviceWorker" in navigator) || !window.isSecureContext) {
+    return null;
+  }
+
+  try {
+    return await navigator.serviceWorker.register("/sw.js");
+  } catch {
+    return null;
+  }
+}
+
+function maybeShowLocalReminders({
+  calculated,
+  config,
+  language,
+  localStorageReady,
+  reminders,
+}: {
+  calculated: ReturnType<typeof calculateVesatot>;
+  config: AppConfig;
+  language: Language;
+  localStorageReady: boolean;
+  reminders: ReminderPreferences;
+}) {
+  if (
+    !localStorageReady ||
+    !reminders.enabled ||
+    !("Notification" in window) ||
+    Notification.permission !== "granted" ||
+    calculated.length === 0
+  ) {
+    return;
+  }
+
+  if (currentTimeValue() < reminders.time) {
+    return;
+  }
+
+  const today = todayDateOnly();
+  const tomorrow = addDaysToDateOnly(today, 1);
+  const sent = safeReadJson<Record<string, boolean>>(REMINDER_SENT_STORAGE_KEY, {});
+  const due = calculated.filter((veset) => {
+    if (reminders.sameDay && veset.date === today) {
+      return true;
+    }
+
+    return reminders.dayBefore && veset.date === tomorrow;
+  });
+
+  if (due.length === 0) {
+    return;
+  }
+
+  registerServiceWorker()
+    .then((registration) => registration || navigator.serviceWorker?.ready)
+    .then((registration) => {
+      if (!registration) {
+        return;
+      }
+
+      for (const veset of due.slice(0, 4)) {
+        const timing = veset.date === today ? "today" : "tomorrow";
+        const tag = `${today}:${timing}:${veset.id}`;
+        if (sent[tag]) {
+          continue;
+        }
+
+        const onahLabel = veset.onah === "day"
+          ? text(config.appText.day, language)
+          : text(config.appText.night, language);
+        const title = language === "he"
+          ? `${vesetTypeLabel(veset.type, language)} - ${onahLabel}`
+          : `${vesetTypeLabel(veset.type, language)} - ${onahLabel}`;
+        const body = language === "he"
+          ? `${timing === "today" ? "היום" : "מחר"}: ${formatUpcomingDate(veset.date, language)}`
+          : `${timing === "today" ? "Today" : "Tomorrow"}: ${formatUpcomingDate(veset.date, language)}`;
+
+        registration.showNotification(title, {
+          body,
+          tag,
+          icon: "/icons/icon-192.png",
+          badge: "/icons/badge-96.png",
+        });
+        sent[tag] = true;
+      }
+
+      safeWriteJson(REMINDER_SENT_STORAGE_KEY, sent);
+    })
+    .catch(() => undefined);
+}
+
+function currentTimeValue(): string {
+  const now = new Date();
+  return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 }
