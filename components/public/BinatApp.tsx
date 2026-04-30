@@ -128,6 +128,11 @@ export function BinatApp({ initialConfig }: { initialConfig: ActiveConfigResult 
     setForm({ id: null, date, onah: "day" });
   }
 
+  function openAddInEntries(date = todayDateOnly()) {
+    setActiveTab("entries");
+    setForm({ id: null, date, onah: "day" });
+  }
+
   function openEdit(entry: PeriodEntry) {
     setForm({ id: entry.id, date: entry.date, onah: entry.onah });
   }
@@ -226,14 +231,6 @@ export function BinatApp({ initialConfig }: { initialConfig: ActiveConfigResult 
                 onClick={() => setActiveTab("settings")}
               />
             </nav>
-            <button
-              type="button"
-              onClick={() => openAdd()}
-              className="focus-ring inline-flex items-center justify-center gap-2 rounded-2xl bg-cedar px-4 py-3 font-semibold text-white shadow-soft transition hover:bg-cedar/90"
-            >
-              <Plus size={18} />
-              {text(config.appText.addEntry, language)}
-            </button>
           </aside>
 
           <section className="min-h-[34rem] rounded-[2rem] border border-white bg-white/90 p-4 shadow-soft sm:p-6">
@@ -252,7 +249,7 @@ export function BinatApp({ initialConfig }: { initialConfig: ActiveConfigResult 
                 calculated={calculated}
                 mode={preferences.calendarMode}
                 onModeChange={(mode) => setPreferences((current) => ({ ...current, calendarMode: mode }))}
-                onDateClick={openAdd}
+                onDateClick={openAddInEntries}
               />
             )}
             {activeTab === "entries" && (
@@ -260,6 +257,7 @@ export function BinatApp({ initialConfig }: { initialConfig: ActiveConfigResult 
                 config={config}
                 entries={entries}
                 language={language}
+                onAdd={() => openAdd()}
                 onEdit={openEdit}
                 onDelete={deleteEntry}
               />
@@ -309,6 +307,14 @@ function UpcomingPanel({
           {entries.length} {text(config.appText.entries, language)}
         </span>
       </div>
+
+      {entries.length === 1 && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
+          {language === "he"
+            ? "נשמרה רשומה אחת. אפשר להמשיך כך, אבל חישוב הפלגה יופיע רק לאחר הוספת תחילת מחזור נוספת."
+            : "One entry is saved. You can continue with one, but Haflagah appears only after you add one more period start."}
+        </div>
+      )}
 
       {calculated.length === 0 ? (
         <EmptyState message={text(config.appText.noEntries, language)} />
@@ -463,19 +469,31 @@ function EntriesPanel({
   config,
   entries,
   language,
+  onAdd,
   onEdit,
   onDelete,
 }: {
   config: AppConfig;
   entries: PeriodEntry[];
   language: Language;
+  onAdd: () => void;
   onEdit: (entry: PeriodEntry) => void;
   onDelete: (id: string) => void;
 }) {
   const sorted = [...entries].sort((a, b) => b.date.localeCompare(a.date));
   return (
     <div className="space-y-4">
-      <h2 className="text-2xl font-bold">{text(config.appText.entries, language)}</h2>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-2xl font-bold">{text(config.appText.entries, language)}</h2>
+        <button
+          type="button"
+          onClick={onAdd}
+          className="focus-ring inline-flex items-center justify-center gap-2 rounded-2xl bg-cedar px-4 py-3 font-semibold text-white shadow-soft transition hover:bg-cedar/90"
+        >
+          <Plus size={18} />
+          {text(config.appText.addEntry, language)}
+        </button>
+      </div>
       {sorted.length === 0 ? (
         <EmptyState message={text(config.appText.noEntries, language)} />
       ) : (
