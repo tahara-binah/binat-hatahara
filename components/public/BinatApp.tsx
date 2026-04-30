@@ -19,10 +19,19 @@ import type { AppConfig, CalculationPreset, Language, Onah } from "@/lib/config/
 import { direction, text } from "@/lib/i18n";
 import {
   assertDateOnly,
+  dateOnlyFromHebrewDate,
   dateOnlyToLocalDate,
+  daysInHebrewMonth,
   formatDateOnly,
   formatHebrewDate,
+  hDateFromDateOnly,
+  hebrewDayLabel,
+  hebrewMonthName,
+  hebrewMonthOptions,
+  hebrewYearLabel,
   localDateToDateOnly,
+  nextHebrewMonthRef,
+  previousHebrewMonthRef,
   todayDateOnly,
   type DateOnly,
 } from "@/lib/dates";
@@ -177,18 +186,6 @@ export function BinatApp({ initialConfig }: { initialConfig: ActiveConfigResult 
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {config.enabledLanguages.map((lang) => (
-              <button
-                key={lang}
-                type="button"
-                onClick={() => setPreferences((current) => ({ ...current, language: lang }))}
-                className={`focus-ring rounded-full px-4 py-2 text-sm font-semibold transition ${
-                  language === lang ? "bg-ink text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                }`}
-              >
-                {lang === "he" ? "עברית" : "English"}
-              </button>
-            ))}
             <a
               href="/admin"
               className={`focus-ring rounded-full px-4 py-2 text-sm font-semibold transition ${
@@ -248,7 +245,6 @@ export function BinatApp({ initialConfig }: { initialConfig: ActiveConfigResult 
                 language={language}
                 calculated={calculated}
                 mode={preferences.calendarMode}
-                onModeChange={(mode) => setPreferences((current) => ({ ...current, calendarMode: mode }))}
                 onDateClick={openAddInEntries}
               />
             )}
@@ -278,6 +274,7 @@ export function BinatApp({ initialConfig }: { initialConfig: ActiveConfigResult 
         <EntryModal
           config={config}
           language={language}
+          calendarMode={preferences.calendarMode}
           form={form}
           onChange={setForm}
           onClose={() => setForm(null)}
@@ -362,98 +359,167 @@ function CalendarPanel({
   calculated,
   language,
   mode,
-  onModeChange,
   onDateClick,
 }: {
   entries: PeriodEntry[];
   calculated: ReturnType<typeof calculateVesatot>;
   language: Language;
   mode: CalendarMode;
-  onModeChange: (mode: CalendarMode) => void;
   onDateClick: (date: DateOnly) => void;
 }) {
   const [currentDate, setCurrentDate] = useState(() => new Date());
-  const monthStart = startOfMonth(currentDate);
-  const days = eachDayOfInterval({
-    start: startOfWeek(monthStart),
-    end: endOfWeek(endOfMonth(monthStart)),
+  const currentDateOnly = localDateToDateOnly(currentDate);
+  const today = todayDateOnly();
+  const displayLanguage: Language = mode === "hebrew" ? "he" : "en";
+
+  const gregorianMonthStart = startOfMonth(currentDate);
+  const gregorianDays = eachDayOfInterval({
+    start: startOfWeek(gregorianMonthStart),
+    end: endOfWeek(endOfMonth(gregorianMonthStart)),
   });
 
+  const currentHebrew = hDateFromDateOnly(currentDateOnly);
+  const hebrewMonth = currentHebrew.getMonth();
+  const hebrewYear = currentHebrew.getFullYear();
+  const hebrewMonthStart = hDateFromDateOnly(dateOnlyFromHebrewDate(1, hebrewMonth, hebrewYear));
+  const hebrewDaysInMonth = daysInHebrewMonth(hebrewMonth, hebrewYear);
+
+  const calendar =
+    mode === "hebrew"
+      ? {
+          dir: "rtl" as const,
+          title: `${hebrewMonthName(hebrewMonth, hebrewYear, "he")} ${hebrewYearLabel(hebrewYear)}`,
+          subtitle: "לוח עברי",
+          weekDays: ["א", "ב", "ג", "ד", "ה", "ו", "ש"],
+          previousLabel: "הקודם",
+          nextLabel: "הבא",
+          previous: () => {
+            const previous = previousHebrewMonthRef(hebrewMonth, hebrewYear);
+            setCurrentDate(dateOnlyToLocalDate(dateOnlyFromHebrewDate(1, previous.month, previous.year)));
+          },
+          next: () => {
+            const next = nextHebrewMonthRef(hebrewMonth, hebrewYear);
+            setCurrentDate(dateOnlyToLocalDate(dateOnlyFromHebrewDate(1, next.month, next.year)));
+          },
+          cells: [
+            ...Array.from({ length: hebrewMonthStart.getDay() }, (_, index) => ({
+              key: `hebrew-pad-start-${index}`,
+              date: null,
+              label: "",
+              inMonth: false,
+            })),
+            ...Array.from({ length: hebrewDaysInMonth }, (_, index) => {
+              const day = index + 1;
+              const dateOnly = dateOnlyFromHebrewDate(day, hebrewMonth, hebrewYear);
+              return {
+                key: dateOnly,
+                date: dateOnly,
+                label: hebrewDayLabel(day),
+                inMonth: true,
+              };
+            }),
+            ...Array.from(
+              { length: (7 - ((hebrewMonthStart.getDay() + hebrewDaysInMonth) % 7)) % 7 },
+              (_, index) => ({
+                key: `hebrew-pad-end-${index}`,
+                date: null,
+                label: "",
+                inMonth: false,
+              }),
+            ),
+          ],
+        }
+      : {
+          dir: "ltr" as const,
+          title: format(currentDate, "MMMM yyyy"),
+          subtitle: "Gregorian calendar",
+          weekDays: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+          previousLabel: "Prev",
+          nextLabel: "Next",
+          previous: () => setCurrentDate((date) => subMonths(date, 1)),
+          next: () => setCurrentDate((date) => addMonths(date, 1)),
+          cells: gregorianDays.map((day) => {
+            const dateOnly = localDateToDateOnly(day);
+            return {
+              key: dateOnly,
+              date: dateOnly,
+              label: format(day, "d"),
+              inMonth: day.getMonth() === currentDate.getMonth(),
+            };
+          }),
+        };
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" dir={calendar.dir}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold">{format(currentDate, "MMMM yyyy")}</h2>
-          <p className="text-sm text-slate-500">{formatHebrewDate(localDateToDateOnly(monthStart), language)}</p>
+          <h2 className="text-2xl font-bold">{calendar.title}</h2>
+          <p className="text-sm text-slate-500">{calendar.subtitle}</p>
         </div>
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => onModeChange("gregorian")}
-            className={`focus-ring rounded-full px-3 py-2 text-xs font-bold ${
-              mode === "gregorian" ? "bg-ink text-white" : "bg-slate-100 text-slate-600"
-            }`}
-          >
-            Gregorian
-          </button>
-          <button
-            type="button"
-            onClick={() => onModeChange("hebrew")}
-            className={`focus-ring rounded-full px-3 py-2 text-xs font-bold ${
-              mode === "hebrew" ? "bg-ink text-white" : "bg-slate-100 text-slate-600"
-            }`}
-          >
-            Hebrew
-          </button>
-          <button
-            type="button"
-            onClick={() => setCurrentDate((date) => subMonths(date, 1))}
+            onClick={calendar.previous}
             className="focus-ring rounded-full bg-white px-3 py-2 text-sm font-bold text-slate-600 shadow-sm"
           >
-            Prev
+            {calendar.previousLabel}
           </button>
           <button
             type="button"
-            onClick={() => setCurrentDate((date) => addMonths(date, 1))}
+            onClick={calendar.next}
             className="focus-ring rounded-full bg-white px-3 py-2 text-sm font-bold text-slate-600 shadow-sm"
           >
-            Next
+            {calendar.nextLabel}
           </button>
         </div>
       </div>
       <div className="grid grid-cols-7 overflow-hidden rounded-2xl border border-slate-100 bg-white">
-        {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+        {calendar.weekDays.map((day) => (
           <div key={day} className="bg-slate-50 p-2 text-center text-xs font-bold text-slate-400">
             {day}
           </div>
         ))}
-        {days.map((day) => {
-          const dateOnly = localDateToDateOnly(day);
-          const dayEntries = entries.filter((entry) => entry.date === dateOnly);
-          const dayVesatot = calculated.filter((veset) => veset.date === dateOnly);
-          const inMonth = day.getMonth() === currentDate.getMonth();
+        {calendar.cells.map((cell) => {
+          if (!cell.date) {
+            return <div key={cell.key} className="min-h-28 border-t border-slate-100 bg-slate-50/70" />;
+          }
+
+          const dayEntries = entries.filter((entry) => entry.date === cell.date);
+          const dayVesatot = calculated.filter((veset) => veset.date === cell.date);
           return (
             <button
-              key={dateOnly}
+              key={cell.key}
               type="button"
-              onClick={() => onDateClick(dateOnly)}
-              className={`focus-ring min-h-28 border-t border-slate-100 p-2 text-left transition hover:bg-cedar/5 ${
-                inMonth ? "bg-white" : "bg-slate-50/70 text-slate-400"
+              onClick={() => onDateClick(cell.date)}
+              className={`focus-ring min-h-28 border-t border-slate-100 p-2 text-start transition hover:bg-cedar/5 ${
+                cell.inMonth ? "bg-white" : "bg-slate-50/70 text-slate-400"
               }`}
             >
-              <span className="block text-sm font-bold">{mode === "hebrew" ? formatHebrewDate(dateOnly, language).split(" ")[0] : format(day, "d")}</span>
-              <span className="block text-[11px] font-semibold text-berry">
-                {mode === "hebrew" ? format(day, "MMM d") : formatHebrewDate(dateOnly, language).split(" ")[0]}
+              <span
+                className={`block text-sm font-bold ${
+                  cell.date === today
+                    ? "inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-cedar px-2 text-white"
+                    : ""
+                }`}
+              >
+                {cell.label}
               </span>
               <div className="mt-2 space-y-1">
                 {dayEntries.map((entry) => (
                   <span key={entry.id} className="block truncate rounded bg-cedar/10 px-1.5 py-0.5 text-[11px] font-bold text-cedar">
-                    Entry · {entry.onah}
+                    {displayLanguage === "he" ? "רשומה" : "Entry"} ·{" "}
+                    {entry.onah === "day"
+                      ? displayLanguage === "he"
+                        ? "יום"
+                        : "day"
+                      : displayLanguage === "he"
+                        ? "לילה"
+                        : "night"}
                   </span>
                 ))}
                 {dayVesatot.map((veset) => (
                   <span key={veset.id} className="block truncate rounded bg-berry/10 px-1.5 py-0.5 text-[11px] font-bold text-berry">
-                    {vesetTypeLabel(veset.type, language)}
+                    {vesetTypeLabel(veset.type, displayLanguage)}
                   </span>
                 ))}
               </div>
@@ -547,6 +613,58 @@ function SettingsPanel({
   return (
     <div className="space-y-5">
       <h2 className="text-2xl font-bold">{text(config.appText.settings, language)}</h2>
+      <div className="grid gap-4 md:grid-cols-2">
+        <section className="rounded-2xl border border-slate-100 bg-white p-4">
+          <h3 className="font-bold text-cedar">{language === "he" ? "שפה" : "Language"}</h3>
+          <div className="mt-3 grid gap-2">
+            {config.enabledLanguages.map((lang) => (
+              <button
+                key={lang}
+                type="button"
+                onClick={() => onPreferencesChange({ ...preferences, language: lang })}
+                className={`focus-ring rounded-2xl px-4 py-3 text-sm font-bold transition ${
+                  preferences.language === lang
+                    ? "bg-ink text-white"
+                    : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                }`}
+              >
+                {lang === "he" ? "עברית" : "English"}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-slate-100 bg-white p-4">
+          <h3 className="font-bold text-cedar">
+            {language === "he" ? "לוח שנה להזנה ותצוגה" : "Calendar for entries and view"}
+          </h3>
+          <div className="mt-3 grid gap-2">
+            {(["hebrew", "gregorian"] as CalendarMode[])
+              .filter((mode) => mode === "gregorian" || config.featureFlags.showHebrewCalendar)
+              .map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => onPreferencesChange({ ...preferences, calendarMode: mode })}
+                  className={`focus-ring rounded-2xl px-4 py-3 text-sm font-bold transition ${
+                    preferences.calendarMode === mode
+                      ? "bg-ink text-white"
+                      : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                  }`}
+                >
+                  {mode === "hebrew"
+                    ? language === "he"
+                      ? "לוח עברי"
+                      : "Hebrew calendar"
+                    : language === "he"
+                      ? "לוח לועזי"
+                      : "Gregorian calendar"}
+                </button>
+              ))}
+          </div>
+        </section>
+      </div>
+
       {config.featureFlags.allowManualPresetSelection && (
         <label className="block">
           <span className="mb-2 block text-sm font-bold text-slate-600">
@@ -583,6 +701,7 @@ function SettingsPanel({
 function EntryModal({
   config,
   language,
+  calendarMode,
   form,
   onChange,
   onClose,
@@ -590,11 +709,26 @@ function EntryModal({
 }: {
   config: AppConfig;
   language: Language;
+  calendarMode: CalendarMode;
   form: EntryForm;
   onChange: (form: EntryForm) => void;
   onClose: () => void;
   onSave: () => void;
 }) {
+  const hebrewDate = hDateFromDateOnly(form.date);
+  const hDay = hebrewDate.getDate();
+  const hMonth = hebrewDate.getMonth();
+  const hYear = hebrewDate.getFullYear();
+  const hMonthOptions = hebrewMonthOptions(hYear);
+
+  function updateHebrewDate(day: number, month: number, year: number) {
+    const validMonth = hebrewMonthOptions(year).some((option) => option.month === month)
+      ? month
+      : 12;
+    const validDay = Math.min(day, daysInHebrewMonth(validMonth, year));
+    onChange({ ...form, date: dateOnlyFromHebrewDate(validDay, validMonth, year) });
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/35 p-4 backdrop-blur">
       <div className="w-full max-w-md rounded-[2rem] bg-white p-5 shadow-soft">
@@ -602,17 +736,64 @@ function EntryModal({
           {form.id ? text(config.appText.editEntry, language) : text(config.appText.addEntry, language)}
         </h2>
         <div className="mt-5 space-y-4">
-          <label className="block">
-            <span className="mb-2 block text-sm font-bold text-slate-600">
-              {text(config.appText.date, language)}
-            </span>
-            <input
-              type="date"
-              value={form.date}
-              onChange={(event) => onChange({ ...form, date: assertDateOnly(event.target.value) })}
-              className="focus-ring w-full rounded-2xl border border-slate-200 px-4 py-3"
-            />
-          </label>
+          {calendarMode === "hebrew" ? (
+            <fieldset dir="rtl">
+              <legend className="mb-2 text-sm font-bold text-slate-600">תאריך עברי</legend>
+              <div className="grid grid-cols-[1fr_1.5fr_1fr] gap-2">
+                <label className="block">
+                  <span className="mb-1 block text-xs font-bold text-slate-500">יום</span>
+                  <select
+                    value={hDay}
+                    onChange={(event) => updateHebrewDate(Number(event.target.value), hMonth, hYear)}
+                    className="focus-ring w-full rounded-2xl border border-slate-200 bg-white px-3 py-3"
+                  >
+                    {Array.from({ length: daysInHebrewMonth(hMonth, hYear) }, (_, index) => index + 1).map(
+                      (day) => (
+                        <option key={day} value={day}>
+                          {hebrewDayLabel(day)}
+                        </option>
+                      ),
+                    )}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-bold text-slate-500">חודש</span>
+                  <select
+                    value={hMonth}
+                    onChange={(event) => updateHebrewDate(hDay, Number(event.target.value), hYear)}
+                    className="focus-ring w-full rounded-2xl border border-slate-200 bg-white px-3 py-3"
+                  >
+                    {hMonthOptions.map((option) => (
+                      <option key={option.month} value={option.month}>
+                        {hebrewMonthName(option.month, option.year, "he")}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-bold text-slate-500">שנה</span>
+                  <input
+                    type="number"
+                    min={5700}
+                    max={5900}
+                    value={hYear}
+                    onChange={(event) => updateHebrewDate(hDay, hMonth, Number(event.target.value))}
+                    className="focus-ring w-full rounded-2xl border border-slate-200 px-3 py-3"
+                  />
+                </label>
+              </div>
+            </fieldset>
+          ) : (
+            <label className="block" dir="ltr">
+              <span className="mb-2 block text-sm font-bold text-slate-600">Gregorian date</span>
+              <input
+                type="date"
+                value={form.date}
+                onChange={(event) => onChange({ ...form, date: assertDateOnly(event.target.value) })}
+                className="focus-ring w-full rounded-2xl border border-slate-200 px-4 py-3"
+              />
+            </label>
+          )}
           <fieldset>
             <legend className="mb-2 text-sm font-bold text-slate-600">
               {text(config.appText.onah, language)}
@@ -715,25 +896,39 @@ function EmptyState({ message }: { message: string }) {
 
 function defaultPreferences(config: AppConfig): UserPreferences {
   return {
-    language: config.defaultLanguage,
+    language: preferredDefaultLanguage(config),
     activePresetId: config.activePresetId,
-    calendarMode: "gregorian",
+    calendarMode: defaultCalendarMode(config),
   };
 }
 
 function normalizePreferences(config: AppConfig, preferences: UserPreferences): UserPreferences {
   const language = config.enabledLanguages.includes(preferences.language)
     ? preferences.language
-    : config.defaultLanguage;
+    : preferredDefaultLanguage(config);
   const activePresetId = config.presets.some((preset) => preset.id === preferences.activePresetId)
     ? preferences.activePresetId
     : config.activePresetId;
+  const calendarMode =
+    preferences.calendarMode === "hebrew" && !config.featureFlags.showHebrewCalendar
+      ? "gregorian"
+      : preferences.calendarMode === "hebrew" || preferences.calendarMode === "gregorian"
+        ? preferences.calendarMode
+        : defaultCalendarMode(config);
 
   return {
     language,
     activePresetId,
-    calendarMode: preferences.calendarMode === "hebrew" ? "hebrew" : "gregorian",
+    calendarMode,
   };
+}
+
+function preferredDefaultLanguage(config: AppConfig): Language {
+  return config.enabledLanguages.includes("he") ? "he" : config.defaultLanguage;
+}
+
+function defaultCalendarMode(config: AppConfig): CalendarMode {
+  return config.featureFlags.showHebrewCalendar ? "hebrew" : "gregorian";
 }
 
 function requirePreset(config: AppConfig, id: string): CalculationPreset {

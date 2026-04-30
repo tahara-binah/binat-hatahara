@@ -3,7 +3,7 @@ import type { AppConfig } from "./schema";
 export const DEFAULT_APP_CONFIG: AppConfig = {
   schemaVersion: 1,
   versionLabel: "Default v1",
-  defaultLanguage: "en",
+  defaultLanguage: "he",
   enabledLanguages: ["en", "he"],
   activePresetId: "standard",
   presets: [

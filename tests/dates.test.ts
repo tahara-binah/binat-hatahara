@@ -3,10 +3,14 @@ import { describe, expect, it } from "vitest";
 import {
   addDaysToDateOnly,
   assertDateOnly,
+  dateOnlyFromHebrewDate,
+  daysInHebrewMonth,
   diffDateOnlyDays,
   hDateFromDateOnly,
   hDateToDateOnly,
+  hebrewMonthName,
   nextHebrewMonthSameDay,
+  previousHebrewMonthRef,
 } from "@/lib/dates";
 
 describe("date-only utilities", () => {
@@ -48,5 +52,15 @@ describe("date-only utilities", () => {
     }
 
     expect(foundMissingMonth).toBe(true);
+  });
+
+  it("builds Hebrew-only month metadata for calendar views and entry forms", () => {
+    expect(hebrewMonthName(1, 5786, "he")).toBe("ניסן");
+    expect(daysInHebrewMonth(1, 5786)).toBeGreaterThanOrEqual(29);
+    expect(dateOnlyFromHebrewDate(1, 1, 5786)).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it("moves from Tishrei to the previous Hebrew year's Elul", () => {
+    expect(previousHebrewMonthRef(7, 5787)).toEqual({ month: 6, year: 5786 });
   });
 });

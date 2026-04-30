@@ -1,4 +1,4 @@
-import { HDate } from "@hebcal/core";
+import { HDate, gematriya } from "@hebcal/core";
 import { format } from "date-fns";
 
 export type DateOnly = `${number}-${number}-${number}`;
@@ -10,6 +10,11 @@ export interface DateParts {
   year: number;
   month: number;
   day: number;
+}
+
+export interface HebrewMonthRef {
+  month: number;
+  year: number;
 }
 
 export function todayDateOnly(now = new Date()): DateOnly {
@@ -90,6 +95,74 @@ export function formatDateOnly(value: DateOnly, pattern = "MMM d, yyyy"): string
 export function formatHebrewDate(value: DateOnly, language: "en" | "he"): string {
   const hDate = hDateFromDateOnly(value);
   return language === "he" ? hDate.renderGematriya() : hDate.toString();
+}
+
+export function hebrewDayLabel(day: number): string {
+  return gematriya(day);
+}
+
+export function hebrewYearLabel(year: number): string {
+  return gematriya(year);
+}
+
+export function hebrewMonthName(month: number, year: number, language: "en" | "he"): string {
+  if (language === "en") {
+    return HDate.getMonthName(month, year);
+  }
+
+  const leapMonthNames: Record<number, string> = {
+    1: "ניסן",
+    2: "אייר",
+    3: "סיוון",
+    4: "תמוז",
+    5: "אב",
+    6: "אלול",
+    7: "תשרי",
+    8: "חשוון",
+    9: "כסלו",
+    10: "טבת",
+    11: "שבט",
+    12: "אדר א׳",
+    13: "אדר ב׳",
+  };
+  const commonMonthNames: Record<number, string> = {
+    ...leapMonthNames,
+    12: "אדר",
+  };
+
+  return (HDate.isLeapYear(year) ? leapMonthNames : commonMonthNames)[month] || "";
+}
+
+export function daysInHebrewMonth(month: number, year: number): number {
+  return HDate.daysInMonth(month, year);
+}
+
+export function dateOnlyFromHebrewDate(day: number, month: number, year: number): DateOnly {
+  return hDateToDateOnly(new HDate(day, month, year));
+}
+
+export function hebrewMonthOptions(year: number): HebrewMonthRef[] {
+  const months = HDate.isLeapYear(year)
+    ? [7, 8, 9, 10, 11, 12, 13, 1, 2, 3, 4, 5, 6]
+    : [7, 8, 9, 10, 11, 12, 1, 2, 3, 4, 5, 6];
+
+  return months.map((month) => ({ month, year }));
+}
+
+export function nextHebrewMonthRef(month: number, year: number): HebrewMonthRef {
+  return nextHebrewMonth(month, year);
+}
+
+export function previousHebrewMonthRef(month: number, year: number): HebrewMonthRef {
+  if (month === 7) {
+    return { month: 6, year: year - 1 };
+  }
+
+  if (month === 1) {
+    return { month: HDate.isLeapYear(year) ? 13 : 12, year };
+  }
+
+  return { month: month - 1, year };
 }
 
 export function nextHebrewMonthSameDay(value: DateOnly): DateOnly | null {
