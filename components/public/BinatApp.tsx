@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Bell,
+  BellOff,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
@@ -49,6 +50,7 @@ interface ReminderPreferences {
   sameDay: boolean;
   dayBefore: boolean;
   time: string;
+  disabledVesetIds: Record<string, boolean>;
 }
 
 interface UserPreferences {
@@ -243,6 +245,28 @@ export function BinatApp({ initialConfig }: { initialConfig: ActiveConfigResult 
     setEntries((current) => current.filter((entry) => entry.id !== id));
   }
 
+  function toggleVesetReminder(vesetId: string) {
+    setPreferences((current) => {
+      const disabledVesetIds = { ...current.reminders.disabledVesetIds };
+      const currentlyEnabled = current.reminders.enabled && !disabledVesetIds[vesetId];
+
+      if (currentlyEnabled) {
+        disabledVesetIds[vesetId] = true;
+      } else {
+        delete disabledVesetIds[vesetId];
+      }
+
+      return {
+        ...current,
+        reminders: {
+          ...current.reminders,
+          enabled: true,
+          disabledVesetIds,
+        },
+      };
+    });
+  }
+
   return (
     <main dir={isRtl ? "rtl" : "ltr"} className="min-h-screen px-3 py-3 text-ink sm:px-6 sm:py-6">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
@@ -311,6 +335,7 @@ export function BinatApp({ initialConfig }: { initialConfig: ActiveConfigResult 
                 reminders={preferences.reminders}
                 notificationPermission={notificationPermission}
                 onOpenReminderSettings={() => setActiveTab("settings")}
+                onToggleReminder={toggleVesetReminder}
               />
             )}
             {activeTab === "calendar" && (
@@ -369,6 +394,7 @@ function UpcomingPanel({
   reminders,
   notificationPermission,
   onOpenReminderSettings,
+  onToggleReminder,
 }: {
   config: AppConfig;
   entries: PeriodEntry[];
@@ -377,6 +403,7 @@ function UpcomingPanel({
   reminders: ReminderPreferences;
   notificationPermission: AppNotificationPermission;
   onOpenReminderSettings: () => void;
+  onToggleReminder: (vesetId: string) => void;
 }) {
   const reminderStatus = reminderHeaderStatus(reminders, notificationPermission, language);
 
@@ -390,9 +417,9 @@ function UpcomingPanel({
             onClick={onOpenReminderSettings}
             aria-label={reminderStatus.label}
             title={reminderStatus.label}
-            className={`focus-ring relative flex h-8 w-8 items-center justify-center rounded-full transition ${reminderStatus.className}`}
+            className={`focus-ring relative flex h-9 w-9 items-center justify-center rounded-full transition ${reminderStatus.className}`}
           >
-            <Bell size={16} />
+            <Bell size={18} />
             {reminderStatus.showDot && (
               <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-current ring-2 ring-white" />
             )}
@@ -415,37 +442,60 @@ function UpcomingPanel({
         <EmptyState message={text(config.appText.noEntries, language)} />
       ) : (
         <div className="grid gap-3">
-          {calculated.map((veset) => (
-            <div
-              key={veset.id}
-              className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm"
-            >
-              <div className="flex items-start gap-4">
-                <div
-                  className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${
-                    veset.onah === "day" ? "bg-amber-100 text-amber-600" : "bg-slate-900 text-white"
-                  }`}
-                >
-                  {veset.onah === "day" ? <Sun size={22} /> : <Moon size={22} />}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="font-bold">{vesetTypeLabel(veset.type, language)}</h3>
-                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
-                      {veset.onah === "day"
-                        ? text(config.appText.day, language)
-                        : text(config.appText.night, language)}
-                    </span>
+          {calculated.map((veset) => {
+            const itemStatus = reminderItemStatus(
+              veset.id,
+              reminders,
+              notificationPermission,
+              language,
+            );
+            const ReminderIcon = itemStatus.enabled ? Bell : BellOff;
+
+            return (
+              <div
+                key={veset.id}
+                className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm"
+              >
+                <div className="flex items-start gap-3 sm:gap-4">
+                  <div
+                    className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${
+                      veset.onah === "day" ? "bg-amber-100 text-amber-600" : "bg-slate-900 text-white"
+                    }`}
+                  >
+                    {veset.onah === "day" ? <Sun size={22} /> : <Moon size={22} />}
                   </div>
-                  <p className="mt-1 text-sm font-semibold text-slate-700">
-                    {formatUpcomingDate(veset.date, language)}
-                  </p>
-                  {language !== "he" && <p className="text-sm text-berry">{veset.hebrewDate}</p>}
-                  <p className="mt-2 text-sm leading-6 text-slate-500">{veset.description}</p>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="font-bold">{vesetTypeLabel(veset.type, language)}</h3>
+                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
+                        {veset.onah === "day"
+                          ? text(config.appText.day, language)
+                          : text(config.appText.night, language)}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-sm font-semibold text-slate-700">
+                      {formatUpcomingDate(veset.date, language)}
+                    </p>
+                    {language !== "he" && <p className="text-sm text-berry">{veset.hebrewDate}</p>}
+                    <p className="mt-2 text-sm leading-6 text-slate-500">{veset.description}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onToggleReminder(veset.id)}
+                    aria-pressed={itemStatus.enabled}
+                    aria-label={itemStatus.label}
+                    title={itemStatus.label}
+                    className={`focus-ring relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl transition ${itemStatus.className}`}
+                  >
+                    <ReminderIcon size={22} />
+                    {itemStatus.showDot && (
+                      <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-current ring-2 ring-white" />
+                    )}
+                  </button>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
@@ -722,21 +772,7 @@ function SettingsPanel({
     });
   }
 
-  async function updateReminderPreference(next: ReminderPreferences) {
-    if (next.enabled && notificationPermission !== "granted") {
-      const permission = await onRequestNotifications();
-      if (permission !== "granted") {
-        onPreferencesChange({
-          ...preferences,
-          reminders: {
-            ...next,
-            enabled: false,
-          },
-        });
-        return;
-      }
-    }
-
+  function updateReminderPreference(next: ReminderPreferences) {
     onPreferencesChange({
       ...preferences,
       reminders: next,
@@ -887,7 +923,7 @@ function SettingsPanel({
                   : "Notifications are blocked in the browser. Enable them in this site’s device settings."}
               </p>
             )}
-            {notificationPermission === "default" && preferences.reminders.enabled && (
+            {notificationPermission === "default" && (
               <button
                 type="button"
                 onClick={onRequestNotifications}
@@ -951,15 +987,30 @@ function ReminderToggle({
   onChange: (checked: boolean) => void;
 }) {
   return (
-    <label className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-3">
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className={`focus-ring flex min-h-12 items-center justify-between gap-3 rounded-2xl border px-3 py-3 text-left transition ${
+        checked
+          ? "border-cedar/20 bg-cedar/10"
+          : "border-slate-100 bg-slate-50 hover:bg-slate-100"
+      }`}
+    >
       <span className="text-sm font-bold text-slate-700">{label}</span>
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(event) => onChange(event.target.checked)}
-        className="h-5 w-5 accent-cedar"
-      />
-    </label>
+      <span
+        className={`flex h-7 w-12 shrink-0 items-center rounded-full p-1 transition ${
+          checked ? "bg-cedar" : "bg-slate-300"
+        }`}
+      >
+        <span
+          className={`h-5 w-5 rounded-full bg-white shadow-sm transition ${
+            checked ? "translate-x-5 rtl:-translate-x-5" : ""
+          }`}
+        />
+      </span>
+    </button>
   );
 }
 
@@ -1190,6 +1241,7 @@ function defaultReminderPreferences(): ReminderPreferences {
     sameDay: true,
     dayBefore: true,
     time: "09:00",
+    disabledVesetIds: {},
   };
 }
 
@@ -1234,6 +1286,62 @@ function reminderHeaderStatus(
     className: "bg-amber-100 text-amber-700 hover:bg-amber-200",
     showDot: true,
   };
+}
+
+function reminderItemStatus(
+  vesetId: string,
+  reminders: ReminderPreferences,
+  notificationPermission: AppNotificationPermission,
+  language: Language,
+): { enabled: boolean; label: string; className: string; showDot: boolean } {
+  const enabled = isVesetReminderEnabled(vesetId, reminders);
+
+  if (!enabled) {
+    return {
+      enabled,
+      label: language === "he" ? "הפעלת תזכורת לפריט הזה" : "Turn on reminder for this item",
+      className: "bg-slate-100 text-slate-500 hover:bg-slate-200",
+      showDot: false,
+    };
+  }
+
+  if (notificationPermission === "granted") {
+    return {
+      enabled,
+      label: language === "he" ? "כיבוי תזכורת לפריט הזה" : "Turn off reminder for this item",
+      className: "bg-cedar/10 text-cedar hover:bg-cedar/15",
+      showDot: true,
+    };
+  }
+
+  if (notificationPermission === "denied") {
+    return {
+      enabled,
+      label: language === "he" ? "התזכורת פעילה, אבל ההתראות חסומות" : "Reminder on, but notifications are blocked",
+      className: "bg-berry/10 text-berry hover:bg-berry/15",
+      showDot: true,
+    };
+  }
+
+  if (notificationPermission === "unsupported") {
+    return {
+      enabled,
+      label: language === "he" ? "התזכורת פעילה, אבל הדפדפן לא תומך בהתראות" : "Reminder on, but notifications are not supported",
+      className: "bg-slate-100 text-slate-400 hover:bg-slate-200",
+      showDot: false,
+    };
+  }
+
+  return {
+    enabled,
+    label: language === "he" ? "התזכורת פעילה, צריך לאשר התראות" : "Reminder on, allow notifications",
+    className: "bg-amber-100 text-amber-700 hover:bg-amber-200",
+    showDot: true,
+  };
+}
+
+function isVesetReminderEnabled(vesetId: string, reminders: ReminderPreferences): boolean {
+  return reminders.enabled && !reminders.disabledVesetIds[vesetId];
 }
 
 function formatUpcomingDate(date: DateOnly, language: Language): string {
@@ -1293,12 +1401,19 @@ function normalizeReminderPreferences(reminders: Partial<ReminderPreferences> | 
   const time = typeof reminders?.time === "string" && /^\d{2}:\d{2}$/.test(reminders.time)
     ? reminders.time
     : defaults.time;
+  const disabledVesetIds =
+    reminders?.disabledVesetIds && typeof reminders.disabledVesetIds === "object"
+      ? Object.fromEntries(
+          Object.entries(reminders.disabledVesetIds).filter(([, disabled]) => disabled === true),
+        )
+      : defaults.disabledVesetIds;
 
   return {
     enabled: typeof reminders?.enabled === "boolean" ? reminders.enabled : defaults.enabled,
     sameDay: typeof reminders?.sameDay === "boolean" ? reminders.sameDay : defaults.sameDay,
     dayBefore: typeof reminders?.dayBefore === "boolean" ? reminders.dayBefore : defaults.dayBefore,
     time,
+    disabledVesetIds,
   };
 }
 
@@ -1366,7 +1481,9 @@ async function registerServiceWorker() {
   }
 
   try {
-    return await navigator.serviceWorker.register("/sw.js");
+    const registration = await navigator.serviceWorker.register("/sw.js");
+    registration.update().catch(() => undefined);
+    return registration;
   } catch {
     return null;
   }
@@ -1403,6 +1520,10 @@ function maybeShowLocalReminders({
   const tomorrow = addDaysToDateOnly(today, 1);
   const sent = safeReadJson<Record<string, boolean>>(REMINDER_SENT_STORAGE_KEY, {});
   const due = calculated.filter((veset) => {
+    if (!isVesetReminderEnabled(veset.id, reminders)) {
+      return false;
+    }
+
     if (reminders.sameDay && veset.date === today) {
       return true;
     }

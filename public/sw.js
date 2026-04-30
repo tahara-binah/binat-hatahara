@@ -1,4 +1,4 @@
-const CACHE_NAME = "binat-hatahara-pwa-v1";
+const CACHE_NAME = "binat-hatahara-pwa-v2";
 const OFFLINE_URL = "/offline.html";
 const APP_SHELL = [
   OFFLINE_URL,
