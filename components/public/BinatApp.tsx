@@ -7,6 +7,7 @@ import {
   ChevronRight,
   Clock3,
   Edit3,
+  House,
   Moon,
   Plus,
   Settings,
@@ -194,18 +195,18 @@ export function BinatApp({ initialConfig }: { initialConfig: ActiveConfigResult 
   return (
     <main dir={isRtl ? "rtl" : "ltr"} className="min-h-screen px-3 py-3 text-ink sm:px-6 sm:py-6">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
-        <header className="flex flex-col gap-4 rounded-3xl border border-white bg-white/85 p-4 shadow-soft backdrop-blur sm:p-5 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="mb-2 inline-flex items-center gap-2 rounded-full bg-cedar/10 px-3 py-1 text-xs font-semibold text-cedar">
+        <header className="flex flex-col items-center gap-4 rounded-3xl border border-white bg-white/85 p-4 text-center shadow-soft backdrop-blur sm:p-5">
+          <div className="mx-auto">
+            <p className="mb-2 inline-flex items-center justify-center gap-2 rounded-full bg-cedar/10 px-3 py-1 text-xs font-semibold text-cedar">
               <ShieldCheck size={14} />
               {text(config.appText.privacyNote, language)}
             </p>
             <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{text(config.appText.appTitle, language)}</h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+            <p className="mx-auto mt-2 max-w-3xl text-sm leading-6 text-slate-600">
               {text(config.appText.guidanceNotice, language)}
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center justify-center gap-2">
             <a
               href="/admin"
               className={`focus-ring rounded-full px-4 py-2 text-sm font-semibold transition ${
@@ -224,8 +225,8 @@ export function BinatApp({ initialConfig }: { initialConfig: ActiveConfigResult 
             <nav className="grid grid-cols-4 gap-1 rounded-3xl border border-white bg-white/80 p-1 shadow-soft lg:grid-cols-1 lg:gap-2 lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
               <TabButton
                 active={activeTab === "upcoming"}
-                icon={Clock3}
-                label={text(config.appText.upcomingOnot, language)}
+                icon={House}
+                label={language === "he" ? "בית" : "Home"}
                 onClick={() => setActiveTab("upcoming")}
               />
               <TabButton
@@ -359,9 +360,9 @@ function UpcomingPanel({
                     </span>
                   </div>
                   <p className="mt-1 text-sm font-semibold text-slate-700">
-                    {formatDateOnly(veset.date, "EEEE, MMM d, yyyy")}
+                    {formatUpcomingDate(veset.date, language)}
                   </p>
-                  <p className="text-sm text-berry">{veset.hebrewDate}</p>
+                  {language !== "he" && <p className="text-sm text-berry">{veset.hebrewDate}</p>}
                   <p className="mt-2 text-sm leading-6 text-slate-500">{veset.description}</p>
                 </div>
               </div>
@@ -979,6 +980,25 @@ function defaultPreferences(config: AppConfig): UserPreferences {
     calendarMode: defaultCalendarMode(config),
     customOptions: {},
   };
+}
+
+function formatUpcomingDate(date: DateOnly, language: Language): string {
+  if (language !== "he") {
+    return formatDateOnly(date, "EEEE, MMM d, yyyy");
+  }
+
+  const weekdays = [
+    "יום ראשון",
+    "יום שני",
+    "יום שלישי",
+    "יום רביעי",
+    "יום חמישי",
+    "יום שישי",
+    "שבת",
+  ];
+  const localDate = dateOnlyToLocalDate(date);
+
+  return `${weekdays[localDate.getDay()]}, ${formatHebrewDate(date, "he")}`;
 }
 
 function normalizePreferences(config: AppConfig, preferences: StoredUserPreferences): UserPreferences {

@@ -75,4 +75,23 @@ describe("calculateVesatot", () => {
     expect(orZarua?.date).toBe("2026-01-29");
     expect(orZarua?.onah).toBe("night");
   });
+
+  it("uses Hebrew rule names inside Hebrew Or Zarua descriptions", () => {
+    const preset: CalculationPreset = {
+      ...standard,
+      customs: { ...standard.customs, includeOrZarua: true },
+    };
+
+    const results = calculateVesatot(
+      [{ id: "a", date: "2026-01-01", onah: "day" }],
+      preset,
+      "he",
+    );
+    const orZarua = results.find(
+      (result) => result.type === "Or Zarua" && result.sourceRule === "or-zarua:onah-beinonit",
+    );
+
+    expect(orZarua?.description).toContain("עונה בינונית");
+    expect(orZarua?.description).not.toContain("Onah Beinonit");
+  });
 });

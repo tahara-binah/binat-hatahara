@@ -199,7 +199,9 @@ function createOrZarua(veset: CalculatedVeset, language: Language): CalculatedVe
     onah: previous.onah,
     hebrewDate: formatHebrewDate(previous.date, language),
     description:
-      language === "he" ? `אור זרוע עבור ${veset.type}` : `Or Zarua for ${veset.type}`,
+      language === "he"
+        ? `אור זרוע עבור ${vesetTypeLabel(veset.type, language)}`
+        : `Or Zarua for ${veset.type}`,
     sourceEntryId: veset.sourceEntryId,
     sourceRule: `or-zarua:${veset.sourceRule}`,
   };
