@@ -308,6 +308,9 @@ export function BinatApp({ initialConfig }: { initialConfig: ActiveConfigResult 
                 entries={entries}
                 language={language}
                 calculated={calculated}
+                reminders={preferences.reminders}
+                notificationPermission={notificationPermission}
+                onOpenReminderSettings={() => setActiveTab("settings")}
               />
             )}
             {activeTab === "calendar" && (
@@ -363,19 +366,41 @@ function UpcomingPanel({
   entries,
   language,
   calculated,
+  reminders,
+  notificationPermission,
+  onOpenReminderSettings,
 }: {
   config: AppConfig;
   entries: PeriodEntry[];
   language: Language;
   calculated: ReturnType<typeof calculateVesatot>;
+  reminders: ReminderPreferences;
+  notificationPermission: AppNotificationPermission;
+  onOpenReminderSettings: () => void;
 }) {
+  const reminderStatus = reminderHeaderStatus(reminders, notificationPermission, language);
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-2xl font-bold">{text(config.appText.upcomingOnot, language)}</h2>
-        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-          {entries.length} {text(config.appText.entries, language)}
-        </span>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={onOpenReminderSettings}
+            aria-label={reminderStatus.label}
+            title={reminderStatus.label}
+            className={`focus-ring relative flex h-8 w-8 items-center justify-center rounded-full transition ${reminderStatus.className}`}
+          >
+            <Bell size={16} />
+            {reminderStatus.showDot && (
+              <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-current ring-2 ring-white" />
+            )}
+          </button>
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+            {entries.length} {text(config.appText.entries, language)}
+          </span>
+        </div>
       </div>
 
       {entries.length === 1 && (
@@ -1165,6 +1190,49 @@ function defaultReminderPreferences(): ReminderPreferences {
     sameDay: true,
     dayBefore: true,
     time: "09:00",
+  };
+}
+
+function reminderHeaderStatus(
+  reminders: ReminderPreferences,
+  notificationPermission: AppNotificationPermission,
+  language: Language,
+): { label: string; className: string; showDot: boolean } {
+  if (!reminders.enabled) {
+    return {
+      label: language === "he" ? "תזכורות כבויות" : "Reminders off",
+      className: "bg-slate-100 text-slate-500 hover:bg-slate-200",
+      showDot: false,
+    };
+  }
+
+  if (notificationPermission === "granted") {
+    return {
+      label: language === "he" ? "תזכורות פעילות" : "Reminders on",
+      className: "bg-cedar/10 text-cedar hover:bg-cedar/15",
+      showDot: true,
+    };
+  }
+
+  if (notificationPermission === "unsupported") {
+    return {
+      label: language === "he" ? "הדפדפן לא תומך בהתראות" : "Notifications are not supported",
+      className: "bg-slate-100 text-slate-400 hover:bg-slate-200",
+      showDot: false,
+    };
+  }
+
+  return {
+    label:
+      notificationPermission === "denied"
+        ? language === "he"
+          ? "ההתראות חסומות"
+          : "Notifications blocked"
+        : language === "he"
+          ? "צריך לאשר התראות"
+          : "Allow notifications",
+    className: "bg-amber-100 text-amber-700 hover:bg-amber-200",
+    showDot: true,
   };
 }
 
