@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_APP_CONFIG } from "@/lib/config/defaults";
 import type { CalculationPreset } from "@/lib/config/schema";
+import { dateOnlyFromHebrewDate } from "@/lib/dates";
 import { calculateVesatot, type PeriodEntry } from "@/lib/veset";
 
 const standard = DEFAULT_APP_CONFIG.presets.find((preset) => preset.id === "standard")!;
@@ -93,5 +94,78 @@ describe("calculateVesatot", () => {
 
     expect(orZarua?.description).toContain("עונה בינונית");
     expect(orZarua?.description).not.toContain("Onah Beinonit");
+  });
+
+  it("uses only a fixed Yom HaChodesh after three matching Hebrew dates", () => {
+    const entries: PeriodEntry[] = [
+      { id: "a", date: dateOnlyFromHebrewDate(5, 7, 5786), onah: "day" },
+      { id: "b", date: dateOnlyFromHebrewDate(5, 8, 5786), onah: "day" },
+      { id: "c", date: dateOnlyFromHebrewDate(5, 9, 5786), onah: "day" },
+    ];
+
+    const results = calculateVesatot(entries, standard, "en");
+
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({
+      type: "Yom HaChodesh",
+      date: dateOnlyFromHebrewDate(5, 10, 5786),
+      onah: "day",
+      sourceRule: "veset-kavua-hodesh",
+    });
+  });
+
+  it("uses only a fixed Haflagah after three equal intervals", () => {
+    const entries: PeriodEntry[] = [
+      { id: "a", date: "2026-01-01", onah: "day" },
+      { id: "b", date: "2026-01-29", onah: "day" },
+      { id: "c", date: "2026-02-26", onah: "day" },
+      { id: "d", date: "2026-03-26", onah: "day" },
+    ];
+
+    const results = calculateVesatot(entries, standard, "en");
+
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({
+      type: "Haflagah",
+      date: "2026-04-23",
+      onah: "day",
+      sourceRule: "veset-kavua-haflagah",
+    });
+  });
+
+  it("keeps a fixed veset after one changed sighting and suppresses Onah Beinonit", () => {
+    const entries: PeriodEntry[] = [
+      { id: "a", date: dateOnlyFromHebrewDate(5, 7, 5786), onah: "day" },
+      { id: "b", date: dateOnlyFromHebrewDate(5, 8, 5786), onah: "day" },
+      { id: "c", date: dateOnlyFromHebrewDate(5, 9, 5786), onah: "day" },
+      { id: "d", date: dateOnlyFromHebrewDate(8, 10, 5786), onah: "night" },
+    ];
+
+    const results = calculateVesatot(entries, standard, "en");
+
+    expect(results.map((result) => result.sourceRule)).toEqual(
+      expect.arrayContaining([
+        "veset-kavua-hodesh",
+        "yom-hachodesh-after-fixed-change",
+        "haflagah-after-fixed-change",
+      ]),
+    );
+    expect(results.some((result) => result.type === "Onah Beinonit")).toBe(false);
+  });
+
+  it("returns to standard calculations after three consecutive deviations from a fixed veset", () => {
+    const entries: PeriodEntry[] = [
+      { id: "a", date: dateOnlyFromHebrewDate(5, 7, 5786), onah: "day" },
+      { id: "b", date: dateOnlyFromHebrewDate(5, 8, 5786), onah: "day" },
+      { id: "c", date: dateOnlyFromHebrewDate(5, 9, 5786), onah: "day" },
+      { id: "d", date: dateOnlyFromHebrewDate(8, 10, 5786), onah: "night" },
+      { id: "e", date: dateOnlyFromHebrewDate(9, 11, 5786), onah: "day" },
+      { id: "f", date: dateOnlyFromHebrewDate(11, 12, 5786), onah: "night" },
+    ];
+
+    const results = calculateVesatot(entries, standard, "en");
+
+    expect(results.some((result) => result.sourceRule === "veset-kavua-hodesh")).toBe(false);
+    expect(results.some((result) => result.type === "Onah Beinonit")).toBe(true);
   });
 });
