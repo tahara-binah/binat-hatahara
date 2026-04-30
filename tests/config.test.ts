@@ -15,4 +15,14 @@ describe("app config schema", () => {
 
     expect(result.success).toBe(false);
   });
+
+  it("validates public calculation add-ons", () => {
+    const result = safeParseAppConfig(DEFAULT_APP_CONFIG);
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.customOptions.map((option) => option.id)).toContain("or-zarua");
+      expect(result.data.customOptions.every((option) => option.defaultEnabled === false)).toBe(true);
+    }
+  });
 });

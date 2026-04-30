@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import {
   CheckCircle2,
-  CopyPlus,
   Eye,
   FileJson,
   History,
@@ -22,8 +21,9 @@ import {
   safeParseAppConfig,
   type AppConfig,
   type AppInstruction,
-  type CalculationCustoms,
+  type CalculationCustomKey,
   type CalculationPreset,
+  type CustomOption,
   type Language,
   type LocalizedText,
 } from "@/lib/config/schema";
@@ -38,6 +38,13 @@ const PREVIEW_ENTRIES: PeriodEntry[] = [
   { id: "preview-2", date: "2026-02-02", onah: "night" },
 ];
 
+const CUSTOM_KEY_OPTIONS: Array<[CalculationCustomKey, string]> = [
+  ["includeDay31", "Day 31"],
+  ["onahBeinonit24h", "24-hour Onah Beinonit"],
+  ["includeOrZarua", "Or Zarua"],
+  ["chabadHaflagah", "Onah-based Haflagah"],
+];
+
 export function AdminDashboard({
   initialDraft,
   initialVersions,
@@ -49,7 +56,6 @@ export function AdminDashboard({
 }) {
   const [config, setConfig] = useState<AppConfig>(initialDraft.config);
   const [versions, setVersions] = useState(initialVersions);
-  const [selectedPresetId, setSelectedPresetId] = useState(config.activePresetId);
   const [jsonText, setJsonText] = useState(() => JSON.stringify(initialDraft.config, null, 2));
   const [showJson, setShowJson] = useState(false);
   const [status, setStatus] = useState<Status>("idle");
@@ -57,19 +63,15 @@ export function AdminDashboard({
   const [error, setError] = useState<string | null>(null);
 
   const validation = useMemo(() => safeParseAppConfig(config), [config]);
-  const selectedPreset =
-    config.presets.find((preset) => preset.id === selectedPresetId) || config.presets[0];
+  const previewPreset = useMemo(() => buildPresetWithDefaultOptions(config), [config]);
   const preview = useMemo(
-    () => calculateVesatot(PREVIEW_ENTRIES, selectedPreset, config.defaultLanguage),
-    [selectedPreset, config.defaultLanguage],
+    () => calculateVesatot(PREVIEW_ENTRIES, previewPreset, config.defaultLanguage),
+    [previewPreset, config.defaultLanguage],
   );
 
   function updateConfig(next: AppConfig) {
     setConfig(next);
     setJsonText(JSON.stringify(next, null, 2));
-    if (!next.presets.some((preset) => preset.id === selectedPresetId)) {
-      setSelectedPresetId(next.activePresetId);
-    }
   }
 
   async function saveDraft() {
@@ -157,7 +159,6 @@ export function AdminDashboard({
       }
 
       setConfig(parsed.data);
-      setSelectedPresetId(parsed.data.activePresetId);
       setError(null);
       setNotice("JSON applied to the draft editor.");
     } catch (jsonError) {
@@ -265,75 +266,49 @@ export function AdminDashboard({
           </Panel>
 
           <Panel
-            title="Calculation Presets"
+            title="Calculation Add-ons"
             action={
               <button
                 type="button"
-                onClick={() => {
-                  const copy = duplicatePreset(selectedPreset, config.presets);
-                  updateConfig({ ...config, presets: [...config.presets, copy] });
-                  setSelectedPresetId(copy.id);
-                }}
+                onClick={() =>
+                  updateConfig({
+                    ...config,
+                    customOptions: [...config.customOptions, newCustomOption(config.customOptions)],
+                  })
+                }
                 className="focus-ring inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700"
               >
-                <CopyPlus size={14} />
-                Duplicate
+                <Plus size={14} />
+                Add option
               </button>
             }
           >
-            <div className="grid gap-4 lg:grid-cols-[16rem_1fr]">
-              <div className="space-y-2">
-                {config.presets.map((preset) => (
-                  <button
-                    key={preset.id}
-                    type="button"
-                    onClick={() => setSelectedPresetId(preset.id)}
-                    className={`focus-ring w-full rounded-2xl px-4 py-3 text-left text-sm font-bold ${
-                      selectedPresetId === preset.id
-                        ? "bg-ink text-white"
-                        : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                    }`}
-                  >
-                    {preset.id}
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => {
-                    const preset = newPreset(config.presets);
-                    updateConfig({ ...config, presets: [...config.presets, preset] });
-                    setSelectedPresetId(preset.id);
-                  }}
-                  className="focus-ring inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-300 px-4 py-3 text-sm font-bold text-slate-600"
-                >
-                  <Plus size={16} />
-                  Add preset
-                </button>
-              </div>
-
-              <PresetEditor
-                preset={selectedPreset}
-                canDelete={config.presets.length > 1}
-                isActive={config.activePresetId === selectedPreset.id}
-                onSetActive={() => updateConfig({ ...config, activePresetId: selectedPreset.id })}
-                onDelete={() => {
-                  const remaining = config.presets.filter((preset) => preset.id !== selectedPreset.id);
-                  const activePresetId =
-                    config.activePresetId === selectedPreset.id ? remaining[0].id : config.activePresetId;
-                  updateConfig({ ...config, presets: remaining, activePresetId });
-                  setSelectedPresetId(activePresetId);
-                }}
-                onChange={(preset) =>
-                  updateConfig({
-                    ...config,
-                    activePresetId:
-                      config.activePresetId === selectedPreset.id ? preset.id : config.activePresetId,
-                    presets: config.presets.map((item) =>
-                      item.id === selectedPreset.id ? preset : item,
-                    ),
-                  })
-                }
-              />
+            <div className="mb-4 rounded-2xl border border-cedar/10 bg-cedar/5 p-4 text-sm leading-6 text-slate-600">
+              Yom HaChodesh, Haflagah, and Onah Beinonit are always included. Each option below appears
+              as its own on/off switch in the public Settings page after publishing.
+            </div>
+            <div className="grid gap-3">
+              {config.customOptions.map((option) => (
+                <CustomOptionEditor
+                  key={option.id}
+                  option={option}
+                  canDelete={config.customOptions.length > 1}
+                  onDelete={() =>
+                    updateConfig({
+                      ...config,
+                      customOptions: config.customOptions.filter((item) => item.id !== option.id),
+                    })
+                  }
+                  onChange={(next) =>
+                    updateConfig({
+                      ...config,
+                      customOptions: config.customOptions.map((item) =>
+                        item.id === option.id ? next : item,
+                      ),
+                    })
+                  }
+                />
+              ))}
             </div>
           </Panel>
 
@@ -381,7 +356,6 @@ export function AdminDashboard({
               {(
                 [
                   ["showHebrewCalendar", "Show Hebrew calendar"],
-                  ["allowManualPresetSelection", "Let users choose preset"],
                   ["showAdminLink", "Show public admin link"],
                 ] as const
               ).map(([key, label]) => (
@@ -452,7 +426,8 @@ export function AdminDashboard({
           <Panel title="Preview" icon={Eye}>
             <div className="space-y-3">
               <p className="text-sm text-slate-600">
-                Active preset preview: <span className="font-bold">{text(selectedPreset.name, config.defaultLanguage)}</span>
+                Default public settings preview:{" "}
+                <span className="font-bold">{text(previewPreset.name, config.defaultLanguage)}</span>
               </p>
               {preview.map((veset) => (
                 <div key={veset.id} className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
@@ -516,48 +491,53 @@ export function AdminDashboard({
   );
 }
 
-function PresetEditor({
-  preset,
+function CustomOptionEditor({
+  option,
   canDelete,
-  isActive,
-  onSetActive,
   onDelete,
   onChange,
 }: {
-  preset: CalculationPreset;
+  option: CustomOption;
   canDelete: boolean;
-  isActive: boolean;
-  onSetActive: () => void;
   onDelete: () => void;
-  onChange: (preset: CalculationPreset) => void;
+  onChange: (option: CustomOption) => void;
 }) {
-  const updateCustom = (key: keyof CalculationCustoms, checked: boolean) =>
-    onChange({ ...preset, customs: { ...preset.customs, [key]: checked } });
-
   return (
     <div className="space-y-4 rounded-2xl border border-slate-100 bg-slate-50 p-4">
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-[1fr_14rem_auto]">
         <TextInput
-          label="Preset ID"
-          value={preset.id}
-          onChange={(value) => onChange({ ...preset, id: slugify(value) })}
+          label="Option ID"
+          value={option.id}
+          onChange={(value) => onChange({ ...option, id: slugify(value) })}
         />
-        <div className="flex items-end gap-2">
-          <button
-            type="button"
-            onClick={onSetActive}
-            className={`focus-ring flex-1 rounded-2xl px-4 py-3 text-sm font-bold ${
-              isActive ? "bg-cedar text-white" : "bg-white text-slate-700"
-            }`}
+        <label className="block">
+          <span className="mb-2 block text-sm font-bold text-slate-600">Calculation behavior</span>
+          <select
+            value={option.customKey}
+            onChange={(event) =>
+              onChange({ ...option, customKey: event.target.value as CalculationCustomKey })
+            }
+            className="focus-ring w-full rounded-2xl border border-slate-200 bg-white px-4 py-3"
           >
-            {isActive ? "Active preset" : "Set active"}
-          </button>
+            {CUSTOM_KEY_OPTIONS.map(([key, label]) => (
+              <option key={key} value={key}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="flex items-end gap-2">
+          <Toggle
+            label="Default on"
+            checked={option.defaultEnabled}
+            onChange={(checked) => onChange({ ...option, defaultEnabled: checked })}
+          />
           {canDelete && (
             <button
               type="button"
               onClick={onDelete}
               className="focus-ring rounded-2xl bg-berry/10 p-3 text-berry"
-              aria-label="Delete preset"
+              aria-label="Delete add-on"
             >
               <Trash2 size={18} />
             </button>
@@ -565,30 +545,12 @@ function PresetEditor({
         </div>
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
-        <LocalizedInput label="Name" value={preset.name} onChange={(name) => onChange({ ...preset, name })} />
+        <LocalizedInput label="Name" value={option.name} onChange={(name) => onChange({ ...option, name })} />
         <LocalizedTextarea
           label="Description"
-          value={preset.description}
-          onChange={(description) => onChange({ ...preset, description })}
+          value={option.description}
+          onChange={(description) => onChange({ ...option, description })}
         />
-      </div>
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {(
-          [
-            ["includeDay31", "Include Day 31"],
-            ["onahBeinonit24h", "24h Onah Beinonit"],
-            ["includeOrZarua", "Include Or Zarua"],
-            ["chabadHaflagah", "Chabad onah Haflagah"],
-            ["chabadCarryover", "Chabad carryover"],
-          ] as const
-        ).map(([key, label]) => (
-          <Toggle
-            key={key}
-            label={label}
-            checked={preset.customs[key]}
-            onChange={(checked) => updateCustom(key, checked)}
-          />
-        ))}
       </div>
     </div>
   );
@@ -787,24 +749,33 @@ function ActionButton({
   );
 }
 
-function duplicatePreset(source: CalculationPreset, existing: CalculationPreset[]): CalculationPreset {
-  const id = uniqueId(`${source.id}-copy`, existing.map((preset) => preset.id));
+function buildPresetWithDefaultOptions(config: AppConfig): CalculationPreset {
+  const basePreset =
+    config.presets.find((preset) => preset.id === config.activePresetId) ||
+    config.presets[0] ||
+    DEFAULT_APP_CONFIG.presets[0];
+  const customs = { ...basePreset.customs };
+
+  for (const option of config.customOptions) {
+    customs[option.customKey] = option.defaultEnabled;
+  }
+
   return {
-    ...source,
-    id,
-    name: {
-      en: `${source.name.en} Copy`,
-      he: `${source.name.he} עותק`,
-    },
+    ...basePreset,
+    customs,
   };
 }
 
-function newPreset(existing: CalculationPreset[]): CalculationPreset {
-  const id = uniqueId("new-preset", existing.map((preset) => preset.id));
+function newCustomOption(existing: CustomOption[]): CustomOption {
+  const template =
+    DEFAULT_APP_CONFIG.customOptions.find(
+      (option) => !existing.some((existingOption) => existingOption.customKey === option.customKey),
+    ) || DEFAULT_APP_CONFIG.customOptions[2];
+  const id = uniqueId(template.id, existing.map((option) => option.id));
+
   return {
-    ...DEFAULT_APP_CONFIG.presets[0],
+    ...template,
     id,
-    name: { en: "New Preset", he: "הגדרה חדשה" },
   };
 }
 

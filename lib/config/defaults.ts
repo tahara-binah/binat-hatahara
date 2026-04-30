@@ -62,9 +62,63 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
       },
     },
   ],
+  customOptions: [
+    {
+      id: "day-31",
+      name: {
+        en: "Day 31",
+        he: "יום ל״א",
+      },
+      description: {
+        en: "Add the 31st day reminder.",
+        he: "הוספת תזכורת ליום השלושים ואחד.",
+      },
+      customKey: "includeDay31",
+      defaultEnabled: false,
+    },
+    {
+      id: "onah-beinonit-24h",
+      name: {
+        en: "24-hour Onah Beinonit",
+        he: "עונה בינונית 24 שעות",
+      },
+      description: {
+        en: "Show both day and night onot for Onah Beinonit.",
+        he: "הצגת עונת יום ועונת לילה לעונה בינונית.",
+      },
+      customKey: "onahBeinonit24h",
+      defaultEnabled: false,
+    },
+    {
+      id: "or-zarua",
+      name: {
+        en: "Or Zarua",
+        he: "אור זרוע",
+      },
+      description: {
+        en: "Add Or Zarua reminders before calculated vesatot.",
+        he: "הוספת תזכורות אור זרוע לפני וסתות מחושבות.",
+      },
+      customKey: "includeOrZarua",
+      defaultEnabled: false,
+    },
+    {
+      id: "chabad-haflagah",
+      name: {
+        en: "Onah-based Haflagah",
+        he: "הפלגה לפי עונות",
+      },
+      description: {
+        en: "Calculate Haflagah by onot instead of whole days.",
+        he: "חישוב הפלגה לפי עונות במקום ימים שלמים.",
+      },
+      customKey: "chabadHaflagah",
+      defaultEnabled: false,
+    },
+  ],
   featureFlags: {
     showHebrewCalendar: true,
-    allowManualPresetSelection: true,
+    allowManualPresetSelection: false,
     showAdminLink: true,
   },
   appText: {

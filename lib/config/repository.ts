@@ -53,7 +53,7 @@ export async function loadActiveConfig(
   }
 
   return {
-    config: parseAppConfig(data.config),
+    config: parseStoredAppConfig(data.config),
     version: data.version,
     source: "supabase",
     publishedAt: data.published_at,
@@ -75,7 +75,7 @@ export async function loadDraftConfig(
 
   if (data) {
     return {
-      config: parseAppConfig(data.config),
+      config: parseStoredAppConfig(data.config),
       updatedAt: data.updated_at,
       source: "draft",
     };
@@ -118,7 +118,7 @@ export async function saveDraftConfig(
   });
 
   return {
-    config: parseAppConfig(data.config),
+    config: parseStoredAppConfig(data.config),
     updatedAt: data.updated_at,
     source: "draft",
   };
@@ -174,7 +174,7 @@ export async function publishDraftConfig(
   });
 
   return {
-    config: parseAppConfig(data.config),
+    config: parseStoredAppConfig(data.config),
     version: data.version,
     source: "supabase",
     publishedAt: data.published_at,
@@ -244,10 +244,23 @@ export async function rollbackToVersion(
   });
 
   return {
-    config: parseAppConfig(target.config),
+    config: parseStoredAppConfig(target.config),
     version: target.version,
     source: "supabase",
     publishedAt: target.published_at,
+  };
+}
+
+function parseStoredAppConfig(input: unknown): AppConfig {
+  const parsed = parseAppConfig(input);
+
+  if (input && typeof input === "object" && "customOptions" in input) {
+    return parsed;
+  }
+
+  return {
+    ...parsed,
+    customOptions: DEFAULT_APP_CONFIG.customOptions,
   };
 }
 

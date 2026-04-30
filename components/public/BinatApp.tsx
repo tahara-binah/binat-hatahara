@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   CalendarDays,
-  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Clock3,
@@ -17,7 +16,7 @@ import {
 } from "lucide-react";
 import { addMonths, eachDayOfInterval, endOfMonth, endOfWeek, format, startOfMonth, startOfWeek, subMonths } from "date-fns";
 import type { ActiveConfigResult } from "@/lib/config/repository";
-import type { AppConfig, CalculationPreset, Language, Onah } from "@/lib/config/schema";
+import type { AppConfig, CalculationPreset, CustomOption, Language, Onah } from "@/lib/config/schema";
 import { direction, text } from "@/lib/i18n";
 import {
   assertDateOnly,
@@ -43,9 +42,13 @@ type CalendarMode = "gregorian" | "hebrew";
 
 interface UserPreferences {
   language: Language;
-  activePresetId: string;
   calendarMode: CalendarMode;
+  customOptions: Record<string, boolean>;
 }
+
+type StoredUserPreferences = Partial<UserPreferences> & {
+  activePresetId?: string;
+};
 
 interface EntryForm {
   id: string | null;
@@ -71,13 +74,10 @@ export function BinatApp({ initialConfig }: { initialConfig: ActiveConfigResult 
   const language = preferences.language;
   const isRtl = direction(language) === "rtl";
 
-  const activePreset = useMemo(() => {
-    if (!config.featureFlags.allowManualPresetSelection) {
-      return requirePreset(config, config.activePresetId);
-    }
-
-    return requirePreset(config, preferences.activePresetId);
-  }, [config, preferences.activePresetId]);
+  const activePreset = useMemo(
+    () => buildPresetWithCustomOptions(config, preferences.customOptions),
+    [config, preferences.customOptions],
+  );
 
   const calculated = useMemo(
     () => calculateVesatot(entries, activePreset, language),
@@ -104,7 +104,7 @@ export function BinatApp({ initialConfig }: { initialConfig: ActiveConfigResult 
           .filter((entry): entry is PeriodEntry => Boolean(entry)),
       );
 
-      const savedPreferences = safeReadJson<UserPreferences | null>(PREFERENCES_STORAGE_KEY, null);
+      const savedPreferences = safeReadJson<StoredUserPreferences | null>(PREFERENCES_STORAGE_KEY, null);
       if (savedPreferences) {
         setPreferences(normalizePreferences(initialConfig.config, savedPreferences));
       }
@@ -219,10 +219,9 @@ export function BinatApp({ initialConfig }: { initialConfig: ActiveConfigResult 
           </div>
         </header>
 
-        <section className="grid gap-4 lg:grid-cols-[18rem_1fr] lg:gap-5">
+        <section className="grid gap-4 lg:grid-cols-[13rem_1fr] lg:gap-5">
           <aside className="flex flex-col gap-3">
-            <ConfigStatus configInfo={configInfo} activePreset={activePreset} language={language} />
-            <nav className="grid grid-cols-2 gap-2 lg:grid-cols-1">
+            <nav className="grid grid-cols-4 gap-1 rounded-3xl border border-white bg-white/80 p-1 shadow-soft lg:grid-cols-1 lg:gap-2 lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
               <TabButton
                 active={activeTab === "upcoming"}
                 icon={Clock3}
@@ -630,13 +629,23 @@ function SettingsPanel({
   preferences: UserPreferences;
   onPreferencesChange: (preferences: UserPreferences) => void;
 }) {
+  function updateCustomOption(optionId: string, enabled: boolean) {
+    onPreferencesChange({
+      ...preferences,
+      customOptions: {
+        ...preferences.customOptions,
+        [optionId]: enabled,
+      },
+    });
+  }
+
   return (
-    <div className="space-y-5">
-      <h2 className="text-2xl font-bold">{text(config.appText.settings, language)}</h2>
-      <div className="grid gap-4 md:grid-cols-2">
-        <section className="rounded-2xl border border-slate-100 bg-white p-4">
+    <div className="space-y-4">
+      <h2 className="text-xl font-bold sm:text-2xl">{text(config.appText.settings, language)}</h2>
+      <div className="grid gap-3 md:grid-cols-2">
+        <section className="rounded-2xl border border-slate-100 bg-white p-3 sm:p-4">
           <h3 className="font-bold text-cedar">{language === "he" ? "שפה" : "Language"}</h3>
-          <div className="mt-3 grid gap-2">
+          <div className="mt-3 grid grid-cols-2 gap-2">
             {config.enabledLanguages.map((lang) => (
               <button
                 key={lang}
@@ -654,11 +663,11 @@ function SettingsPanel({
           </div>
         </section>
 
-        <section className="rounded-2xl border border-slate-100 bg-white p-4">
+        <section className="rounded-2xl border border-slate-100 bg-white p-3 sm:p-4">
           <h3 className="font-bold text-cedar">
-            {language === "he" ? "לוח שנה להזנה ותצוגה" : "Calendar for entries and view"}
+            {language === "he" ? "לוח שנה" : "Calendar"}
           </h3>
-          <div className="mt-3 grid gap-2">
+          <div className="mt-3 grid grid-cols-2 gap-2">
             {(["hebrew", "gregorian"] as CalendarMode[])
               .filter((mode) => mode === "gregorian" || config.featureFlags.showHebrewCalendar)
               .map((mode) => (
@@ -685,36 +694,70 @@ function SettingsPanel({
         </section>
       </div>
 
-      {config.featureFlags.allowManualPresetSelection && (
-        <label className="block">
-          <span className="mb-2 block text-sm font-bold text-slate-600">
-            {text(config.appText.activePreset, language)}
-          </span>
-          <select
-            value={preferences.activePresetId}
-            onChange={(event) =>
-              onPreferencesChange({ ...preferences, activePresetId: event.target.value })
-            }
-            className="focus-ring w-full rounded-2xl border border-slate-200 bg-white px-4 py-3"
-          >
-            {config.presets.map((preset) => (
-              <option key={preset.id} value={preset.id}>
-                {text(preset.name, language)}
-              </option>
+      {config.customOptions.length > 0 && (
+        <section className="rounded-2xl border border-slate-100 bg-white p-3 sm:p-4">
+          <div className="mb-3">
+            <h3 className="font-bold text-cedar">
+              {language === "he" ? "תוספות חישוב" : "Calculation Add-ons"}
+            </h3>
+            <p className="mt-1 text-xs font-semibold text-slate-500">
+              {language === "he"
+                ? "יום החודש, הפלגה, ועונה בינונית כלולים תמיד."
+                : "Yom HaChodesh, Haflagah, and Onah Beinonit are always included."}
+            </p>
+          </div>
+          <div className="grid gap-2">
+            {config.customOptions.map((option) => (
+              <CustomOptionToggle
+                key={option.id}
+                option={option}
+                language={language}
+                checked={isCustomOptionEnabled(option, preferences.customOptions)}
+                onChange={(checked) => updateCustomOption(option.id, checked)}
+              />
             ))}
-          </select>
-        </label>
+          </div>
+        </section>
       )}
 
       <div className="grid gap-3 md:grid-cols-2">
         {config.instructions.map((instruction) => (
-          <div key={instruction.id} className="rounded-2xl border border-slate-100 bg-white p-4">
+          <div key={instruction.id} className="rounded-2xl border border-slate-100 bg-white p-3 sm:p-4">
             <h3 className="font-bold text-cedar">{text(instruction.title, language)}</h3>
             <p className="mt-2 text-sm leading-6 text-slate-600">{text(instruction.body, language)}</p>
           </div>
         ))}
       </div>
     </div>
+  );
+}
+
+function CustomOptionToggle({
+  option,
+  language,
+  checked,
+  onChange,
+}: {
+  option: CustomOption;
+  language: Language;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className="flex items-start justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-3">
+      <span className="min-w-0">
+        <span className="block text-sm font-bold text-slate-800">{text(option.name, language)}</span>
+        <span className="mt-1 block text-xs leading-5 text-slate-500">
+          {text(option.description, language)}
+        </span>
+      </span>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+        className="mt-1 h-5 w-5 shrink-0 accent-cedar"
+      />
+    </label>
   );
 }
 
@@ -896,30 +939,6 @@ function EntryModal({
   );
 }
 
-function ConfigStatus({
-  configInfo,
-  activePreset,
-  language,
-}: {
-  configInfo: ActiveConfigResult;
-  activePreset: CalculationPreset;
-  language: Language;
-}) {
-  return (
-    <div className="rounded-[1.5rem] border border-white bg-white/85 p-4 shadow-soft">
-      <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-cedar">
-        <CheckCircle2 size={14} />
-        Config v{configInfo.version}
-      </p>
-      <h2 className="mt-2 font-bold">{text(activePreset.name, language)}</h2>
-      <p className="mt-1 text-sm leading-5 text-slate-500">{text(activePreset.description, language)}</p>
-      <p className="mt-3 text-xs font-semibold text-slate-400">
-        Source: {configInfo.source}
-      </p>
-    </div>
-  );
-}
-
 function TabButton({
   active,
   icon: Icon,
@@ -935,7 +954,7 @@ function TabButton({
     <button
       type="button"
       onClick={onClick}
-      className={`focus-ring flex items-center gap-3 rounded-2xl px-4 py-3 text-left font-semibold transition ${
+      className={`focus-ring flex min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-1.5 py-2 text-center text-[11px] font-semibold transition lg:flex-row lg:justify-start lg:gap-3 lg:px-4 lg:py-3 lg:text-left lg:text-sm ${
         active ? "bg-ink text-white shadow-soft" : "bg-white/85 text-slate-600 hover:bg-white"
       }`}
     >
@@ -957,29 +976,39 @@ function EmptyState({ message }: { message: string }) {
 function defaultPreferences(config: AppConfig): UserPreferences {
   return {
     language: preferredDefaultLanguage(config),
-    activePresetId: config.activePresetId,
     calendarMode: defaultCalendarMode(config),
+    customOptions: {},
   };
 }
 
-function normalizePreferences(config: AppConfig, preferences: UserPreferences): UserPreferences {
-  const language = config.enabledLanguages.includes(preferences.language)
+function normalizePreferences(config: AppConfig, preferences: StoredUserPreferences): UserPreferences {
+  const language = preferences.language && config.enabledLanguages.includes(preferences.language)
     ? preferences.language
     : preferredDefaultLanguage(config);
-  const activePresetId = config.presets.some((preset) => preset.id === preferences.activePresetId)
-    ? preferences.activePresetId
-    : config.activePresetId;
   const calendarMode =
     preferences.calendarMode === "hebrew" && !config.featureFlags.showHebrewCalendar
       ? "gregorian"
       : preferences.calendarMode === "hebrew" || preferences.calendarMode === "gregorian"
         ? preferences.calendarMode
         : defaultCalendarMode(config);
+  const customOptions: Record<string, boolean> = {};
+  const legacyPreset = preferences.activePresetId
+    ? config.presets.find((preset) => preset.id === preferences.activePresetId)
+    : null;
+
+  for (const option of config.customOptions) {
+    const saved = preferences.customOptions?.[option.id];
+    if (typeof saved === "boolean") {
+      customOptions[option.id] = saved;
+    } else if (legacyPreset) {
+      customOptions[option.id] = legacyPreset.customs[option.customKey];
+    }
+  }
 
   return {
     language,
-    activePresetId,
     calendarMode,
+    customOptions,
   };
 }
 
@@ -993,6 +1022,27 @@ function defaultCalendarMode(config: AppConfig): CalendarMode {
 
 function requirePreset(config: AppConfig, id: string): CalculationPreset {
   return config.presets.find((preset) => preset.id === id) || config.presets[0];
+}
+
+function buildPresetWithCustomOptions(
+  config: AppConfig,
+  customOptions: Record<string, boolean>,
+): CalculationPreset {
+  const basePreset = requirePreset(config, config.activePresetId);
+  const customs = { ...basePreset.customs };
+
+  for (const option of config.customOptions) {
+    customs[option.customKey] = isCustomOptionEnabled(option, customOptions);
+  }
+
+  return {
+    ...basePreset,
+    customs,
+  };
+}
+
+function isCustomOptionEnabled(option: CustomOption, customOptions: Record<string, boolean>) {
+  return customOptions[option.id] ?? option.defaultEnabled;
 }
 
 function safeReadJson<T>(key: string, fallback: T): T {

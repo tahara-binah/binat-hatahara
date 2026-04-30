@@ -16,6 +16,13 @@ export const calculationCustomsSchema = z.object({
   chabadCarryover: z.boolean(),
 });
 
+export const calculationCustomKeySchema = z.enum([
+  "includeDay31",
+  "onahBeinonit24h",
+  "includeOrZarua",
+  "chabadHaflagah",
+]);
+
 export const calculationPresetSchema = z.object({
   id: z
     .string()
@@ -24,6 +31,17 @@ export const calculationPresetSchema = z.object({
   name: localizedTextSchema,
   description: localizedTextSchema,
   customs: calculationCustomsSchema,
+});
+
+export const customOptionSchema = z.object({
+  id: z
+    .string()
+    .min(2)
+    .regex(/^[a-z0-9-]+$/, "Use lowercase letters, numbers, and hyphens only"),
+  name: localizedTextSchema,
+  description: localizedTextSchema,
+  customKey: calculationCustomKeySchema,
+  defaultEnabled: z.boolean(),
 });
 
 export const appInstructionSchema = z.object({
@@ -40,6 +58,7 @@ export const appConfigSchema = z
     enabledLanguages: z.array(languageSchema).min(1),
     activePresetId: z.string().min(2),
     presets: z.array(calculationPresetSchema).min(1),
+    customOptions: z.array(customOptionSchema).default([]),
     featureFlags: z.object({
       showHebrewCalendar: z.boolean(),
       allowManualPresetSelection: z.boolean(),
@@ -77,6 +96,28 @@ export const appConfigSchema = z
       });
     }
 
+    const customOptionIds = new Set<string>();
+    const customOptionKeys = new Set<string>();
+    config.customOptions.forEach((option, index) => {
+      if (customOptionIds.has(option.id)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Custom option IDs must be unique",
+          path: ["customOptions", index, "id"],
+        });
+      }
+      customOptionIds.add(option.id);
+
+      if (customOptionKeys.has(option.customKey)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Only one public add-on can control each calculation behavior",
+          path: ["customOptions", index, "customKey"],
+        });
+      }
+      customOptionKeys.add(option.customKey);
+    });
+
     for (const language of config.enabledLanguages) {
       if (!["en", "he"].includes(language)) {
         ctx.addIssue({
@@ -92,7 +133,9 @@ export type Language = z.infer<typeof languageSchema>;
 export type Onah = z.infer<typeof onahSchema>;
 export type LocalizedText = z.infer<typeof localizedTextSchema>;
 export type CalculationCustoms = z.infer<typeof calculationCustomsSchema>;
+export type CalculationCustomKey = z.infer<typeof calculationCustomKeySchema>;
 export type CalculationPreset = z.infer<typeof calculationPresetSchema>;
+export type CustomOption = z.infer<typeof customOptionSchema>;
 export type AppInstruction = z.infer<typeof appInstructionSchema>;
 export type AppConfig = z.infer<typeof appConfigSchema>;
 
