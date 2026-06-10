@@ -1,14 +1,35 @@
-# Binat Hatahara Next.js Rebuild
+# Binat Hatahara
 
-This is a clean Next.js + Supabase rebuild with:
+Binat Hatahara is a privacy-first taharah calendar app built with Next.js and Supabase.
 
-- Public app at `/`
-- Admin panel at `/admin`
-- Supabase Auth magic-link owner login
-- Draft/publish configuration flow
-- Versioned published configs
+The public app runs at `/`. It lets users enter and calculate period-related dates in the browser, while an owner-only admin panel at `/admin` manages the published configuration used by the app.
+
+## Privacy Model
+
+User entries are stored only in the user's browser with `localStorage`.
+
+The public app does not send period entries, preferences, or calendar history to Supabase. Supabase stores only app configuration and admin publishing metadata:
+
+- `admin_users`
+- `config_drafts`
+- `config_versions`
+- `audit_events`
+
+Local browser storage keys used by the public app:
+
+- `period_entries`
+- `user_preferences`
+- `active_config_version`
+
+## Features
+
+- Public taharah calendar app
 - Local-only user period entries
+- Hebrew calendar calculations
 - Timezone-safe date-only storage
+- Owner admin panel
+- Supabase Auth magic-link owner login
+- Draft, publish, version, and rollback flow for app configuration
 
 ## Local Setup
 
@@ -57,20 +78,15 @@ This is a clean Next.js + Supabase rebuild with:
 5. Publish when ready.
 6. Public users receive the active published config from `/api/config/active`.
 
-## Privacy Model
-
-User period entries are stored only in browser local storage under:
-
-- `period_entries`
-- `user_preferences`
-- `active_config_version`
-
-They are not sent to Supabase by the public app.
-
 ## Verification
 
 ```bash
+npm run lint
 npm run typecheck
 npm test
 npm run build
 ```
+
+## License
+
+MIT
