@@ -36,7 +36,7 @@ export async function loadActiveConfig(
   }
 
   const { data, error } = await supabase
-    .from("config_versions")
+    .from("tahara_config_versions")
     .select("version, config, published_at")
     .eq("status", "active")
     .order("published_at", { ascending: false })
@@ -64,7 +64,7 @@ export async function loadDraftConfig(
   supabase: SupabaseClient,
 ): Promise<DraftConfigResult> {
   const { data, error } = await supabase
-    .from("config_drafts")
+    .from("tahara_config_drafts")
     .select("config, updated_at")
     .eq("draft_key", "main")
     .maybeSingle();
@@ -97,7 +97,7 @@ export async function saveDraftConfig(
   const parsed = parseAppConfig(config);
 
   const { data, error } = await supabase
-    .from("config_drafts")
+    .from("tahara_config_drafts")
     .upsert(
       {
         draft_key: "main",
@@ -132,7 +132,7 @@ export async function publishDraftConfig(
   const parsed = parseAppConfig(draft.config);
 
   const { data: latest, error: latestError } = await supabase
-    .from("config_versions")
+    .from("tahara_config_versions")
     .select("version")
     .order("version", { ascending: false })
     .limit(1)
@@ -145,7 +145,7 @@ export async function publishDraftConfig(
   const nextVersion = latest ? latest.version + 1 : 1;
 
   const { error: supersedeError } = await supabase
-    .from("config_versions")
+    .from("tahara_config_versions")
     .update({ status: "superseded" })
     .eq("status", "active");
 
@@ -154,7 +154,7 @@ export async function publishDraftConfig(
   }
 
   const { data, error } = await supabase
-    .from("config_versions")
+    .from("tahara_config_versions")
     .insert({
       version: nextVersion,
       config: parsed,
@@ -185,7 +185,7 @@ export async function listConfigVersions(
   supabase: SupabaseClient,
 ): Promise<ConfigVersionSummary[]> {
   const { data, error } = await supabase
-    .from("config_versions")
+    .from("tahara_config_versions")
     .select("id, version, status, published_at, config")
     .order("version", { ascending: false })
     .limit(20);
@@ -212,7 +212,7 @@ export async function rollbackToVersion(
   userId: string,
 ): Promise<ActiveConfigResult> {
   const { data: target, error: targetError } = await supabase
-    .from("config_versions")
+    .from("tahara_config_versions")
     .select("version, config, published_at")
     .eq("version", version)
     .maybeSingle();
@@ -222,7 +222,7 @@ export async function rollbackToVersion(
   }
 
   const { error: supersedeError } = await supabase
-    .from("config_versions")
+    .from("tahara_config_versions")
     .update({ status: "superseded" })
     .eq("status", "active");
 
@@ -231,7 +231,7 @@ export async function rollbackToVersion(
   }
 
   const { error: activateError } = await supabase
-    .from("config_versions")
+    .from("tahara_config_versions")
     .update({ status: "active" })
     .eq("version", version);
 
@@ -270,7 +270,7 @@ export async function insertAuditEvent(
   action: string,
   metadata: Record<string, unknown>,
 ) {
-  const { error } = await supabase.from("audit_events").insert({
+  const { error } = await supabase.from("tahara_audit_events").insert({
     actor_id: userId,
     action,
     metadata,
