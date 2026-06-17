@@ -8,12 +8,18 @@ The public app runs at `/`. It lets users enter and calculate period-related dat
 
 User entries are stored only in the user's browser with `localStorage`.
 
-The public app does not send period entries, preferences, or calendar history to Supabase. Supabase stores only app configuration and admin publishing metadata:
+The public app does not send period entries, preferences, or calendar history to Supabase. Supabase stores only app configuration and admin publishing metadata in the shared Binah Apps Supabase project:
 
-- `admin_users`
-- `config_drafts`
-- `config_versions`
-- `audit_events`
+- `tahara_admin_users`
+- `tahara_config_drafts`
+- `tahara_config_versions`
+- `tahara_audit_events`
+
+```text
+Shared Supabase project: your Supabase project
+Project ref: YOUR_SUPABASE_PROJECT_REF
+Project URL: https://YOUR_SUPABASE_PROJECT_REF.supabase.co
+```
 
 Local browser storage keys used by the public app:
 
@@ -53,12 +59,19 @@ Local browser storage keys used by the public app:
    NEXT_PUBLIC_ADMIN_EMAIL=
    ```
 
-4. Run the Supabase migration in `supabase/migrations/0001_initial.sql`.
+4. Use the shared Supabase migrations in:
+
+   ```text
+   supabase/migrations
+   ```
+
+   The local `supabase/migrations/0001_initial.sql` file is historical from the
+   standalone project setup.
 
 5. Bootstrap the owner email in Supabase SQL:
 
    ```sql
-   insert into public.admin_users (email, is_owner)
+   insert into public.tahara_admin_users (email, is_owner)
    values ('you@example.com', true)
    on conflict (email) do update set is_owner = true;
    ```
