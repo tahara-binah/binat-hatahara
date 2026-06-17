@@ -39,7 +39,7 @@ export default async function AdminPage() {
     setupError =
       error instanceof Error
         ? error.message
-        : "Unable to load admin data. Check the Supabase migration and admin_users row.";
+        : "Unable to load admin data. Check the Supabase migration and tahara_admin_users row.";
   }
 
   return (
@@ -72,7 +72,7 @@ function SetupNotice({ message }: { message: string }) {
       <h1 className="mt-2 text-3xl font-bold text-amber-950">Admin panel is waiting on Supabase</h1>
       <p className="mt-4 max-w-3xl text-sm leading-6 text-amber-900">{message}</p>
       <pre className="mt-5 overflow-auto rounded-2xl bg-amber-950 p-4 text-xs leading-6 text-amber-50">
-{`insert into public.admin_users (email, is_owner)
+{`insert into public.tahara_admin_users (email, is_owner)
 values ('you@example.com', true)
 on conflict (email) do update set is_owner = true;`}
       </pre>
