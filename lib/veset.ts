@@ -292,7 +292,9 @@ export function calculateEstimatedFutureVesatot(
 
   const lastConfirmedEntry = sortedEntries[sortedEntries.length - 1];
   const typicalHebrewDay = medianRecentHebrewDay(sortedEntries, 3);
-  const horizon = addMonthsToDateOnly(lastConfirmedEntry.date, monthsAhead);
+  const confirmedResults = calculateVesatot(sortedEntries, preset, language);
+  const estimateStartDate = latestVesetDate(confirmedResults) || lastConfirmedEntry.date;
+  const horizon = addMonthsToDateOnly(estimateStartDate, monthsAhead);
   const projectedEntries = [...sortedEntries];
   const projectedVesatot: CalculatedVeset[] = [];
   let previousProjectedEntry = lastConfirmedEntry;
@@ -311,7 +313,7 @@ export function calculateEstimatedFutureVesatot(
     projectedEntries.push(projectedEntry);
 
     for (const veset of calculateVesatot(projectedEntries, preset, language, { includeFixedVeset: false })) {
-      if (veset.date <= lastConfirmedEntry.date || veset.date > horizon) {
+      if (veset.date <= estimateStartDate || veset.date > horizon) {
         continue;
       }
 
@@ -320,7 +322,7 @@ export function calculateEstimatedFutureVesatot(
           ? adjustEstimatedYomHaChodesh(veset, projectedEntry, typicalHebrewDay, language)
           : veset;
 
-      if (adjustedVeset.date <= lastConfirmedEntry.date || adjustedVeset.date > horizon) {
+      if (adjustedVeset.date <= estimateStartDate || adjustedVeset.date > horizon) {
         continue;
       }
 
@@ -342,6 +344,13 @@ export function calculateEstimatedFutureVesatot(
   }
 
   return sortVesatot(dedupeVesatot(projectedVesatot));
+}
+
+function latestVesetDate(vesatot: CalculatedVeset[]): DateOnly | null {
+  return vesatot.reduce<DateOnly | null>(
+    (latest, veset) => (latest === null || veset.date > latest ? veset.date : latest),
+    null,
+  );
 }
 
 function adjustEstimatedYomHaChodesh(
