@@ -210,6 +210,24 @@ describe("calculateVesatot", () => {
     expect(results.some((result) => result.description.includes("30-day"))).toBe(false);
   });
 
+  it("estimates Yom HaChodesh from the typical recent Hebrew day", () => {
+    const entries: PeriodEntry[] = [
+      { id: "a", date: "2026-03-19", onah: "day" },
+      { id: "b", date: "2026-04-22", onah: "day" },
+      { id: "c", date: "2026-05-20", onah: "day" },
+      { id: "d", date: "2026-06-16", onah: "day" },
+    ];
+
+    const results = calculateEstimatedFutureVesatot(entries, standard, "en", 2);
+    const yomHaChodesh = results.find(
+      (result) =>
+        result.type === "Yom HaChodesh" &&
+        result.sourceRule.includes("typical-hebrew-day"),
+    );
+
+    expect(yomHaChodesh?.description).toContain("(4)");
+  });
+
   it("recalculates estimated dates after a new confirmed period entry is added", () => {
     const before: PeriodEntry[] = [
       { id: "a", date: "2026-01-01", onah: "day" },

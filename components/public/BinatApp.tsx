@@ -434,10 +434,6 @@ function UpcomingPanel({
   onToggleReminder: (vesetId: string) => void;
 }) {
   const reminderStatus = reminderHeaderStatus(reminders, notificationPermission, language);
-  const upcomingItems = useMemo(
-    () => sortDisplayVesatot([...calculated, ...estimatedFuture]),
-    [calculated, estimatedFuture],
-  );
 
   return (
     <div className="space-y-5">
@@ -470,82 +466,127 @@ function UpcomingPanel({
         </div>
       )}
 
-      {estimatedFuture.length > 0 && (
-        <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm leading-6 text-sky-950">
-          {language === "he"
-            ? "תאריכים עתידיים המסומנים משוער מבוססים על אורך המחזור הממוצע מכל הרשומות. לאחר הוספת המחזור הבא הם יחושבו מחדש, והחודש הקרוב יוצג לפי הרשומה בפועל."
-            : "Future dates marked Estimated are based on your average cycle length across all saved entries. After you add the next period, they will be recalculated and the upcoming month will use the confirmed entry."}
-        </div>
-      )}
-
-      {upcomingItems.length === 0 ? (
+      {calculated.length === 0 && estimatedFuture.length === 0 ? (
         <EmptyState message={text(config.appText.noEntries, language)} />
       ) : (
-        <div className="grid gap-3">
-          {upcomingItems.map((veset) => {
-            const itemStatus = reminderItemStatus(
-              veset.id,
-              reminders,
-              notificationPermission,
-              language,
-            );
-            const ReminderIcon = itemStatus.enabled ? Bell : BellOff;
-
-            return (
-              <div
+        <div className="space-y-5">
+          <div className="grid gap-3">
+            {calculated.map((veset) => (
+              <VesetCard
                 key={veset.id}
-                className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm"
-              >
-                <div className="flex items-start gap-3 sm:gap-4">
-                  <div
-                    className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${
-                      veset.onah === "day" ? "bg-amber-100 text-amber-600" : "bg-slate-900 text-white"
-                    }`}
-                  >
-                    {veset.onah === "day" ? <Sun size={22} /> : <Moon size={22} />}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="font-bold">{vesetTypeLabel(veset.type, language)}</h3>
-                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
-                        {veset.onah === "day"
-                          ? text(config.appText.day, language)
-                          : text(config.appText.night, language)}
-                      </span>
-                      {veset.estimated && (
-                        <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-bold text-sky-700">
-                          {language === "he" ? "משוער" : "Estimated"}
-                        </span>
-                      )}
-                    </div>
-                    <p className="mt-1 text-sm font-semibold text-slate-700">
-                      {formatUpcomingDate(veset.date, language)}
-                    </p>
-                    {language !== "he" && <p className="text-sm text-berry">{veset.hebrewDate}</p>}
-                    <p className="mt-2 text-sm leading-6 text-slate-500">{veset.description}</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => onToggleReminder(veset.id)}
-                    aria-pressed={itemStatus.enabled}
-                    aria-label={itemStatus.label}
-                    title={itemStatus.label}
-                    disabled={veset.estimated}
-                    className={`focus-ring relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl transition ${
-                      veset.estimated ? "cursor-not-allowed bg-slate-100 text-slate-300" : itemStatus.className
-                    }`}
-                  >
-                    <ReminderIcon size={22} />
-                    {itemStatus.showDot && (
-                      <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-current ring-2 ring-white" />
-                    )}
-                  </button>
-                </div>
+                config={config}
+                language={language}
+                veset={veset}
+                reminders={reminders}
+                notificationPermission={notificationPermission}
+                onToggleReminder={onToggleReminder}
+              />
+            ))}
+          </div>
+
+          {estimatedFuture.length > 0 && (
+            <>
+              <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm leading-6 text-sky-950">
+                {language === "he"
+                  ? "התאריכים הבאים הם משוערים בלבד ונפרדים מהתאריכים הקבועים למעלה. הם מבוססים על אורך מחזור טיפוסי ועל יום עברי טיפוסי מהרשומות האחרונות, ויחושבו מחדש לאחר הוספת המחזור הבא."
+                  : "The following dates are estimates only and are separate from the confirmed dates above. They use your typical cycle length and typical recent Hebrew day, and will be recalculated after you add the next period."}
               </div>
-            );
-          })}
+              <section className="space-y-3">
+                <h3 className="text-lg font-bold text-sky-900">
+                  {language === "he" ? "תאריכים משוערים" : "Estimated Dates"}
+                </h3>
+                <div className="grid gap-3">
+                  {estimatedFuture.map((veset) => (
+                    <VesetCard
+                      key={veset.id}
+                      config={config}
+                      language={language}
+                      veset={veset}
+                      reminders={reminders}
+                      notificationPermission={notificationPermission}
+                      onToggleReminder={onToggleReminder}
+                    />
+                  ))}
+                </div>
+              </section>
+            </>
+          )}
         </div>
       )}
+    </div>
+  );
+}
+
+function VesetCard({
+  config,
+  language,
+  veset,
+  reminders,
+  notificationPermission,
+  onToggleReminder,
+}: {
+  config: AppConfig;
+  language: Language;
+  veset: CalculatedVeset;
+  reminders: ReminderPreferences;
+  notificationPermission: AppNotificationPermission;
+  onToggleReminder: (vesetId: string) => void;
+}) {
+  const itemStatus = reminderItemStatus(
+    veset.id,
+    reminders,
+    notificationPermission,
+    language,
+  );
+  const ReminderIcon = itemStatus.enabled ? Bell : BellOff;
+
+  return (
+    <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+      <div className="flex items-start gap-3 sm:gap-4">
+        <div
+          className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${
+            veset.onah === "day" ? "bg-amber-100 text-amber-600" : "bg-slate-900 text-white"
+          }`}
+        >
+          {veset.onah === "day" ? <Sun size={22} /> : <Moon size={22} />}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="font-bold">{vesetTypeLabel(veset.type, language)}</h3>
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
+              {veset.onah === "day"
+                ? text(config.appText.day, language)
+                : text(config.appText.night, language)}
+            </span>
+            {veset.estimated && (
+              <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-bold text-sky-700">
+                {language === "he" ? "משוער" : "Estimated"}
+              </span>
+            )}
+          </div>
+          <p className="mt-1 text-sm font-semibold text-slate-700">
+            {formatUpcomingDate(veset.date, language)}
+          </p>
+          {language !== "he" && <p className="text-sm text-berry">{veset.hebrewDate}</p>}
+          <p className="mt-2 text-sm leading-6 text-slate-500">{veset.description}</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => onToggleReminder(veset.id)}
+          aria-pressed={itemStatus.enabled}
+          aria-label={itemStatus.label}
+          title={itemStatus.label}
+          disabled={veset.estimated}
+          className={`focus-ring relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl transition ${
+            veset.estimated ? "cursor-not-allowed bg-slate-100 text-slate-300" : itemStatus.className
+          }`}
+        >
+          <ReminderIcon size={22} />
+          {itemStatus.showDot && (
+            <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-current ring-2 ring-white" />
+          )}
+        </button>
+      </div>
     </div>
   );
 }

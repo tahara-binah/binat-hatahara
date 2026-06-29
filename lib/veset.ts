@@ -291,6 +291,7 @@ export function calculateEstimatedFutureVesatot(
   }
 
   const lastConfirmedEntry = sortedEntries[sortedEntries.length - 1];
+  const typicalHebrewDay = medianRecentHebrewDay(sortedEntries, 3);
   const horizon = addMonthsToDateOnly(lastConfirmedEntry.date, monthsAhead);
   const projectedEntries = [...sortedEntries];
   const projectedVesatot: CalculatedVeset[] = [];
@@ -314,15 +315,24 @@ export function calculateEstimatedFutureVesatot(
         continue;
       }
 
+      const adjustedVeset =
+        veset.sourceRule === "yom-hachodesh"
+          ? adjustEstimatedYomHaChodesh(veset, projectedEntry, typicalHebrewDay, language)
+          : veset;
+
+      if (adjustedVeset.date <= lastConfirmedEntry.date || adjustedVeset.date > horizon) {
+        continue;
+      }
+
       projectedVesatot.push({
-        ...veset,
-        id: `estimated:${cycleIndex}:${veset.id}`,
+        ...adjustedVeset,
+        id: `estimated:${cycleIndex}:${adjustedVeset.id}`,
         description:
           language === "he"
-            ? `${veset.description} - משוער לפי אורך מחזור טיפוסי של ${projectedIntervalDays} ימים`
-            : `${veset.description} - estimated from your typical ${projectedIntervalDays}-day cycle`,
+            ? `${adjustedVeset.description} - משוער לפי אורך מחזור טיפוסי של ${projectedIntervalDays} ימים`
+            : `${adjustedVeset.description} - estimated from your typical ${projectedIntervalDays}-day cycle`,
         sourceEntryId: lastConfirmedEntry.id,
-        sourceRule: `estimated-median:${cycleIndex}:${veset.sourceRule}`,
+        sourceRule: `estimated-median:${cycleIndex}:${adjustedVeset.sourceRule}`,
         estimated: true,
         estimatedCycleIndex: cycleIndex,
       });
@@ -332,6 +342,50 @@ export function calculateEstimatedFutureVesatot(
   }
 
   return sortVesatot(dedupeVesatot(projectedVesatot));
+}
+
+function adjustEstimatedYomHaChodesh(
+  veset: CalculatedVeset,
+  projectedEntry: PeriodEntry,
+  typicalHebrewDay: number,
+  language: Language,
+): CalculatedVeset {
+  const date = nextHebrewMonthDay(projectedEntry.date, typicalHebrewDay);
+
+  if (!date) {
+    return veset;
+  }
+
+  return {
+    ...veset,
+    id: `${veset.type}:${date}:${veset.onah}:${veset.sourceRule}:typical-hebrew-day-${typicalHebrewDay}`,
+    date,
+    hebrewDate: formatHebrewDate(date, language),
+    description:
+      language === "he"
+        ? `יום החודש לפי יום עברי טיפוסי (${typicalHebrewDay}) מהרשומות האחרונות`
+        : `Yom HaChodesh using the typical recent Hebrew day (${typicalHebrewDay})`,
+    sourceRule: `${veset.sourceRule}:typical-hebrew-day`,
+  };
+}
+
+function nextHebrewMonthDay(reference: DateOnly, hebrewDay: number): DateOnly | null {
+  const referenceHebrew = hDateFromDateOnly(reference);
+  const next = nextHebrewMonthRef(referenceHebrew.getMonth(), referenceHebrew.getFullYear());
+
+  if (hebrewDay > daysInHebrewMonth(next.month, next.year)) {
+    return null;
+  }
+
+  return dateOnlyFromHebrewDate(hebrewDay, next.month, next.year);
+}
+
+function medianRecentHebrewDay(entries: PeriodEntry[], sampleSize: number): number {
+  const recentDays = entries
+    .slice(-sampleSize)
+    .map((entry) => hDateFromDateOnly(entry.date).getDate());
+
+  return medianIntervalDays(recentDays);
 }
 
 function medianIntervalDays(intervals: number[]): number {
