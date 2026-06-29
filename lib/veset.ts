@@ -43,6 +43,10 @@ export interface CalculatedVeset {
 
 type VesetDraft = Omit<CalculatedVeset, "id" | "hebrewDate">;
 
+interface CalculateVesatotOptions {
+  includeFixedVeset?: boolean;
+}
+
 type FixedVeset =
   | {
       kind: "hodesh";
@@ -63,6 +67,7 @@ export function calculateVesatot(
   entries: PeriodEntry[],
   preset: CalculationPreset,
   language: Language,
+  options: CalculateVesatotOptions = {},
 ): CalculatedVeset[] {
   if (entries.length === 0) {
     return [];
@@ -88,7 +93,8 @@ export function calculateVesatot(
     results.push(buildVeset(veset));
   };
 
-  const fixedVeset = detectActiveFixedVeset(sortedEntries);
+  const fixedVeset =
+    options.includeFixedVeset === false ? null : detectActiveFixedVeset(sortedEntries);
   if (fixedVeset) {
     const fixedResults = [buildVeset(createFixedVeset(fixedVeset, lastEntry, language))];
     if (fixedVeset.deviations === 0) {
@@ -305,7 +311,7 @@ export function calculateEstimatedFutureVesatot(
 
     projectedEntries.push(projectedEntry);
 
-    for (const veset of calculateVesatot(projectedEntries, preset, language)) {
+    for (const veset of calculateVesatot(projectedEntries, preset, language, { includeFixedVeset: false })) {
       if (veset.date <= lastConfirmedEntry.date || veset.date > horizon) {
         continue;
       }

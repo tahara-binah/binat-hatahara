@@ -212,4 +212,18 @@ describe("calculateVesatot", () => {
     expect(beforeFirstEstimated.date).not.toBe(afterFirstEstimated.date);
     expect(afterFirstEstimated.sourceEntryId).toBe("d");
   });
+
+  it("does not establish a fixed veset from repeated projected future entries", () => {
+    const entries: PeriodEntry[] = [
+      { id: "a", date: "2026-01-01", onah: "day" },
+      { id: "b", date: "2026-01-29", onah: "day" },
+    ];
+
+    const results = calculateEstimatedFutureVesatot(entries, standard, "en", 6);
+    const thirdProjectedCycle = results.filter((result) => result.estimatedCycleIndex === 3);
+
+    expect(results.some((result) => result.sourceRule.includes("veset-kavua"))).toBe(false);
+    expect(thirdProjectedCycle.some((result) => result.type === "Haflagah")).toBe(true);
+    expect(thirdProjectedCycle.some((result) => result.type === "Onah Beinonit")).toBe(true);
+  });
 });
