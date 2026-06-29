@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_APP_CONFIG } from "@/lib/config/defaults";
 import type { CalculationPreset } from "@/lib/config/schema";
 import { dateOnlyFromHebrewDate } from "@/lib/dates";
-import { calculateVesatot, type PeriodEntry } from "@/lib/veset";
+import { calculateEstimatedFutureVesatot, calculateVesatot, type PeriodEntry } from "@/lib/veset";
 
 const standard = DEFAULT_APP_CONFIG.presets.find((preset) => preset.id === "standard")!;
 
@@ -167,5 +167,49 @@ describe("calculateVesatot", () => {
 
     expect(results.some((result) => result.sourceRule === "veset-kavua-hodesh")).toBe(false);
     expect(results.some((result) => result.type === "Onah Beinonit")).toBe(true);
+  });
+
+  it("does not estimate future dates until at least two period entries exist", () => {
+    const results = calculateEstimatedFutureVesatot(
+      [{ id: "a", date: "2026-01-01", onah: "day" }],
+      standard,
+      "en",
+    );
+
+    expect(results).toEqual([]);
+  });
+
+  it("estimates six months ahead from the average interval across all entries", () => {
+    const entries: PeriodEntry[] = [
+      { id: "a", date: "2026-01-01", onah: "day" },
+      { id: "b", date: "2026-01-29", onah: "day" },
+      { id: "c", date: "2026-02-28", onah: "day" },
+    ];
+
+    const results = calculateEstimatedFutureVesatot(entries, standard, "en");
+
+    expect(results.length).toBeGreaterThan(0);
+    expect(results.every((result) => result.estimated)).toBe(true);
+    expect(results.every((result) => result.date <= "2026-08-28")).toBe(true);
+    expect(results.some((result) => result.description.includes("29-day average"))).toBe(true);
+    expect(results.some((result) => result.sourceRule.startsWith("estimated-average:1:"))).toBe(true);
+  });
+
+  it("recalculates estimated dates after a new confirmed period entry is added", () => {
+    const before: PeriodEntry[] = [
+      { id: "a", date: "2026-01-01", onah: "day" },
+      { id: "b", date: "2026-01-29", onah: "day" },
+      { id: "c", date: "2026-02-26", onah: "day" },
+    ];
+    const after: PeriodEntry[] = [
+      ...before,
+      { id: "d", date: "2026-03-30", onah: "night" },
+    ];
+
+    const beforeFirstEstimated = calculateEstimatedFutureVesatot(before, standard, "en")[0];
+    const afterFirstEstimated = calculateEstimatedFutureVesatot(after, standard, "en")[0];
+
+    expect(beforeFirstEstimated.date).not.toBe(afterFirstEstimated.date);
+    expect(afterFirstEstimated.sourceEntryId).toBe("d");
   });
 });

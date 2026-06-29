@@ -80,6 +80,12 @@ export function addDaysToDateOnly(value: DateOnly, days: number): DateOnly {
   return utcDayIndexToDateOnly(dateOnlyToUtcDayIndex(value) + days);
 }
 
+export function addMonthsToDateOnly(value: DateOnly, months: number): DateOnly {
+  const date = dateOnlyToLocalDate(value);
+  date.setMonth(date.getMonth() + months);
+  return localDateToDateOnly(date);
+}
+
 export function diffDateOnlyDays(later: DateOnly, earlier: DateOnly): number {
   return dateOnlyToUtcDayIndex(later) - dateOnlyToUtcDayIndex(earlier);
 }

@@ -2,6 +2,7 @@ import type { CalculationPreset, Language, Onah } from "@/lib/config/schema";
 import {
   absoluteIndexToOnah,
   addDaysToDateOnly,
+  addMonthsToDateOnly,
   assertDateOnly,
   dateOnlyFromHebrewDate,
   diffDateOnlyDays,
@@ -36,6 +37,8 @@ export interface CalculatedVeset {
   description: string;
   sourceEntryId: string;
   sourceRule: string;
+  estimated?: boolean;
+  estimatedCycleIndex?: number;
 }
 
 type VesetDraft = Omit<CalculatedVeset, "id" | "hebrewDate">;
@@ -249,6 +252,84 @@ export function calculateVesatot(
   return sortVesatot(withOrZarua);
 }
 
+export function calculateEstimatedFutureVesatot(
+  entries: PeriodEntry[],
+  preset: CalculationPreset,
+  language: Language,
+  monthsAhead = 6,
+): CalculatedVeset[] {
+  const sortedEntries = entries
+    .map((entry) => ({
+      ...entry,
+      date: assertDateOnly(entry.date),
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  if (sortedEntries.length < 2 || monthsAhead <= 0) {
+    return [];
+  }
+
+  const intervals = sortedEntries
+    .slice(1)
+    .map((entry, index) => diffDateOnlyDays(entry.date, sortedEntries[index].date))
+    .filter((interval) => interval > 0);
+
+  if (intervals.length === 0) {
+    return [];
+  }
+
+  const averageIntervalDays = Math.round(
+    intervals.reduce((total, interval) => total + interval, 0) / intervals.length,
+  );
+
+  if (averageIntervalDays <= 0) {
+    return [];
+  }
+
+  const lastConfirmedEntry = sortedEntries[sortedEntries.length - 1];
+  const horizon = addMonthsToDateOnly(lastConfirmedEntry.date, monthsAhead);
+  const projectedEntries = [...sortedEntries];
+  const projectedVesatot: CalculatedVeset[] = [];
+  let previousProjectedEntry = lastConfirmedEntry;
+
+  for (let cycleIndex = 1; cycleIndex <= 12; cycleIndex += 1) {
+    const projectedEntry: PeriodEntry = {
+      id: `estimated-period-${cycleIndex}`,
+      date: addDaysToDateOnly(previousProjectedEntry.date, averageIntervalDays),
+      onah: lastConfirmedEntry.onah,
+    };
+
+    if (projectedEntry.date > horizon) {
+      break;
+    }
+
+    projectedEntries.push(projectedEntry);
+
+    for (const veset of calculateVesatot(projectedEntries, preset, language)) {
+      if (veset.date <= lastConfirmedEntry.date || veset.date > horizon) {
+        continue;
+      }
+
+      projectedVesatot.push({
+        ...veset,
+        id: `estimated:${cycleIndex}:${veset.id}`,
+        description:
+          language === "he"
+            ? `${veset.description} - משוער לפי אורך מחזור ממוצע של ${averageIntervalDays} ימים`
+            : `${veset.description} - estimated from your ${averageIntervalDays}-day average cycle`,
+        sourceEntryId: lastConfirmedEntry.id,
+        sourceRule: `estimated-average:${cycleIndex}:${veset.sourceRule}`,
+        estimated: true,
+        estimatedCycleIndex: cycleIndex,
+      });
+    }
+
+    previousProjectedEntry = projectedEntry;
+  }
+
+  return sortVesatot(dedupeVesatot(projectedVesatot));
+}
+
 function sortVesatot(vesatot: CalculatedVeset[]): CalculatedVeset[] {
   return vesatot.sort((a, b) => {
     const dateCompare = a.date.localeCompare(b.date);
@@ -258,6 +339,23 @@ function sortVesatot(vesatot: CalculatedVeset[]): CalculatedVeset[] {
 
     return a.onah === b.onah ? a.type.localeCompare(b.type) : a.onah === "day" ? -1 : 1;
   });
+}
+
+function dedupeVesatot(vesatot: CalculatedVeset[]): CalculatedVeset[] {
+  const seen = new Set<string>();
+  const unique: CalculatedVeset[] = [];
+
+  for (const veset of vesatot) {
+    const key = `${veset.type}:${veset.date}:${veset.onah}:${veset.sourceRule}`;
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    unique.push(veset);
+  }
+
+  return unique;
 }
 
 function detectActiveFixedVeset(entries: PeriodEntry[]): FixedVeset | null {

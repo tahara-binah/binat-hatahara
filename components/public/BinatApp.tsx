@@ -39,7 +39,13 @@ import {
   todayDateOnly,
   type DateOnly,
 } from "@/lib/dates";
-import { calculateVesatot, type PeriodEntry, vesetTypeLabel } from "@/lib/veset";
+import {
+  calculateEstimatedFutureVesatot,
+  calculateVesatot,
+  type CalculatedVeset,
+  type PeriodEntry,
+  vesetTypeLabel,
+} from "@/lib/veset";
 
 type Tab = "upcoming" | "calendar" | "entries" | "settings";
 type CalendarMode = "gregorian" | "hebrew";
@@ -53,10 +59,16 @@ interface ReminderPreferences {
   disabledVesetIds: Record<string, boolean>;
 }
 
+interface FutureEstimatePreferences {
+  enabled: boolean;
+  months: number;
+}
+
 interface UserPreferences {
   language: Language;
   calendarMode: CalendarMode;
   customOptions: Record<string, boolean>;
+  futureEstimates: FutureEstimatePreferences;
   reminders: ReminderPreferences;
 }
 
@@ -99,6 +111,18 @@ export function BinatApp({ initialConfig }: { initialConfig: ActiveConfigResult 
   const calculated = useMemo(
     () => calculateVesatot(entries, activePreset, language),
     [entries, activePreset, language],
+  );
+  const estimatedFuture = useMemo(
+    () =>
+      preferences.futureEstimates.enabled
+        ? calculateEstimatedFutureVesatot(
+            entries,
+            activePreset,
+            language,
+            preferences.futureEstimates.months,
+          )
+        : [],
+    [entries, activePreset, language, preferences.futureEstimates],
   );
 
   useEffect(() => {
@@ -332,6 +356,7 @@ export function BinatApp({ initialConfig }: { initialConfig: ActiveConfigResult 
                 entries={entries}
                 language={language}
                 calculated={calculated}
+                estimatedFuture={estimatedFuture}
                 reminders={preferences.reminders}
                 notificationPermission={notificationPermission}
                 onOpenReminderSettings={() => setActiveTab("settings")}
@@ -343,6 +368,7 @@ export function BinatApp({ initialConfig }: { initialConfig: ActiveConfigResult 
                 entries={entries}
                 language={language}
                 calculated={calculated}
+                estimatedFuture={estimatedFuture}
                 mode={preferences.calendarMode}
                 onDateClick={openAddInEntries}
               />
@@ -391,6 +417,7 @@ function UpcomingPanel({
   entries,
   language,
   calculated,
+  estimatedFuture,
   reminders,
   notificationPermission,
   onOpenReminderSettings,
@@ -400,12 +427,17 @@ function UpcomingPanel({
   entries: PeriodEntry[];
   language: Language;
   calculated: ReturnType<typeof calculateVesatot>;
+  estimatedFuture: CalculatedVeset[];
   reminders: ReminderPreferences;
   notificationPermission: AppNotificationPermission;
   onOpenReminderSettings: () => void;
   onToggleReminder: (vesetId: string) => void;
 }) {
   const reminderStatus = reminderHeaderStatus(reminders, notificationPermission, language);
+  const upcomingItems = useMemo(
+    () => sortDisplayVesatot([...calculated, ...estimatedFuture]),
+    [calculated, estimatedFuture],
+  );
 
   return (
     <div className="space-y-5">
@@ -438,11 +470,19 @@ function UpcomingPanel({
         </div>
       )}
 
-      {calculated.length === 0 ? (
+      {estimatedFuture.length > 0 && (
+        <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm leading-6 text-sky-950">
+          {language === "he"
+            ? "תאריכים עתידיים המסומנים משוער מבוססים על אורך המחזור הממוצע מכל הרשומות. לאחר הוספת המחזור הבא הם יחושבו מחדש, והחודש הקרוב יוצג לפי הרשומה בפועל."
+            : "Future dates marked Estimated are based on your average cycle length across all saved entries. After you add the next period, they will be recalculated and the upcoming month will use the confirmed entry."}
+        </div>
+      )}
+
+      {upcomingItems.length === 0 ? (
         <EmptyState message={text(config.appText.noEntries, language)} />
       ) : (
         <div className="grid gap-3">
-          {calculated.map((veset) => {
+          {upcomingItems.map((veset) => {
             const itemStatus = reminderItemStatus(
               veset.id,
               reminders,
@@ -472,6 +512,11 @@ function UpcomingPanel({
                           ? text(config.appText.day, language)
                           : text(config.appText.night, language)}
                       </span>
+                      {veset.estimated && (
+                        <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-bold text-sky-700">
+                          {language === "he" ? "משוער" : "Estimated"}
+                        </span>
+                      )}
                     </div>
                     <p className="mt-1 text-sm font-semibold text-slate-700">
                       {formatUpcomingDate(veset.date, language)}
@@ -485,7 +530,10 @@ function UpcomingPanel({
                     aria-pressed={itemStatus.enabled}
                     aria-label={itemStatus.label}
                     title={itemStatus.label}
-                    className={`focus-ring relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl transition ${itemStatus.className}`}
+                    disabled={veset.estimated}
+                    className={`focus-ring relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl transition ${
+                      veset.estimated ? "cursor-not-allowed bg-slate-100 text-slate-300" : itemStatus.className
+                    }`}
                   >
                     <ReminderIcon size={22} />
                     {itemStatus.showDot && (
@@ -505,12 +553,14 @@ function UpcomingPanel({
 function CalendarPanel({
   entries,
   calculated,
+  estimatedFuture,
   language,
   mode,
   onDateClick,
 }: {
   entries: PeriodEntry[];
   calculated: ReturnType<typeof calculateVesatot>;
+  estimatedFuture: CalculatedVeset[];
   language: Language;
   mode: CalendarMode;
   onDateClick: (date: DateOnly) => void;
@@ -519,6 +569,10 @@ function CalendarPanel({
   const currentDateOnly = localDateToDateOnly(currentDate);
   const today = todayDateOnly();
   const displayLanguage: Language = mode === "hebrew" ? "he" : "en";
+  const calendarVesatot = useMemo(
+    () => sortDisplayVesatot([...calculated, ...estimatedFuture]),
+    [calculated, estimatedFuture],
+  );
 
   const gregorianMonthStart = startOfMonth(currentDate);
   const gregorianDays = eachDayOfInterval({
@@ -633,7 +687,7 @@ function CalendarPanel({
           }
 
           const dayEntries = entries.filter((entry) => entry.date === cell.date);
-          const dayVesatot = calculated.filter((veset) => veset.date === cell.date);
+          const dayVesatot = calendarVesatot.filter((veset) => veset.date === cell.date);
           return (
             <button
               key={cell.key}
@@ -666,8 +720,14 @@ function CalendarPanel({
                   </span>
                 ))}
                 {dayVesatot.map((veset) => (
-                  <span key={veset.id} className="block truncate rounded bg-berry/10 px-1 py-0.5 text-[10px] font-bold text-berry sm:px-1.5 sm:text-[11px]">
+                  <span
+                    key={veset.id}
+                    className={`block truncate rounded px-1 py-0.5 text-[10px] font-bold sm:px-1.5 sm:text-[11px] ${
+                      veset.estimated ? "bg-sky-100 text-sky-700" : "bg-berry/10 text-berry"
+                    }`}
+                  >
                     {vesetTypeLabel(veset.type, displayLanguage)}
+                    {veset.estimated ? ` ${displayLanguage === "he" ? "משוער" : "est."}` : ""}
                   </span>
                 ))}
               </div>
@@ -779,6 +839,13 @@ function SettingsPanel({
     });
   }
 
+  function updateFutureEstimatePreference(next: FutureEstimatePreferences) {
+    onPreferencesChange({
+      ...preferences,
+      futureEstimates: next,
+    });
+  }
+
   return (
     <div className="space-y-4">
       <h2 className="text-xl font-bold sm:text-2xl">{text(config.appText.settings, language)}</h2>
@@ -859,6 +926,56 @@ function SettingsPanel({
           </div>
         </section>
       )}
+
+      <section className="rounded-2xl border border-slate-100 bg-white p-3 sm:p-4">
+        <div className="mb-3">
+          <h3 className="font-bold text-cedar">
+            {language === "he" ? "תאריכים עתידיים משוערים" : "Future Estimated Dates"}
+          </h3>
+          <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
+            {language === "he"
+              ? "תאריכים אלה מוצגים לתכנון בלבד ומחושבים לפי אורך המחזור הממוצע מכל הרשומות."
+              : "These dates are for planning only and are calculated from the average cycle length across all entries."}
+          </p>
+        </div>
+        <div className="grid gap-2">
+          <ReminderToggle
+            label={language === "he" ? "להציג תאריכים עתידיים משוערים?" : "Do you want future estimated dates?"}
+            checked={preferences.futureEstimates.enabled}
+            onChange={(checked) =>
+              updateFutureEstimatePreference({
+                ...preferences.futureEstimates,
+                enabled: checked,
+              })
+            }
+          />
+          {preferences.futureEstimates.enabled && (
+            <label className="block rounded-2xl border border-slate-100 bg-slate-50 px-3 py-3">
+              <span className="mb-2 block text-sm font-bold text-slate-700">
+                {language === "he" ? "כמה חודשים קדימה?" : "How many extra months?"}
+              </span>
+              <select
+                value={preferences.futureEstimates.months}
+                onChange={(event) =>
+                  updateFutureEstimatePreference({
+                    ...preferences.futureEstimates,
+                    months: normalizeFutureEstimateMonths(Number(event.target.value)),
+                  })
+                }
+                className="focus-ring w-full rounded-xl border border-slate-200 bg-white px-3 py-2 font-semibold text-slate-700"
+              >
+                {[1, 2, 3, 4, 5, 6].map((months) => (
+                  <option key={months} value={months}>
+                    {language === "he"
+                      ? `${months} ${months === 1 ? "חודש" : "חודשים"}`
+                      : `${months} ${months === 1 ? "month" : "months"}`}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
+      </section>
 
       <section className="rounded-2xl border border-slate-100 bg-white p-3 sm:p-4">
         <div className="mb-3 flex items-center gap-2">
@@ -1231,7 +1348,15 @@ function defaultPreferences(config: AppConfig): UserPreferences {
     language: preferredDefaultLanguage(config),
     calendarMode: defaultCalendarMode(config),
     customOptions: {},
+    futureEstimates: defaultFutureEstimatePreferences(),
     reminders: defaultReminderPreferences(),
+  };
+}
+
+function defaultFutureEstimatePreferences(): FutureEstimatePreferences {
+  return {
+    enabled: false,
+    months: 6,
   };
 }
 
@@ -1344,6 +1469,21 @@ function isVesetReminderEnabled(vesetId: string, reminders: ReminderPreferences)
   return reminders.enabled && !reminders.disabledVesetIds[vesetId];
 }
 
+function sortDisplayVesatot(vesatot: CalculatedVeset[]): CalculatedVeset[] {
+  return [...vesatot].sort((a, b) => {
+    const dateCompare = a.date.localeCompare(b.date);
+    if (dateCompare !== 0) {
+      return dateCompare;
+    }
+
+    if (a.estimated !== b.estimated) {
+      return a.estimated ? 1 : -1;
+    }
+
+    return a.onah === b.onah ? a.type.localeCompare(b.type) : a.onah === "day" ? -1 : 1;
+  });
+}
+
 function formatUpcomingDate(date: DateOnly, language: Language): string {
   if (language !== "he") {
     return formatDateOnly(date, "EEEE, MMM d, yyyy");
@@ -1375,6 +1515,7 @@ function normalizePreferences(config: AppConfig, preferences: StoredUserPreferen
         : defaultCalendarMode(config);
   const customOptions: Record<string, boolean> = {};
   const reminders = normalizeReminderPreferences(preferences.reminders);
+  const futureEstimates = normalizeFutureEstimatePreferences(preferences.futureEstimates);
   const legacyPreset = preferences.activePresetId
     ? config.presets.find((preset) => preset.id === preferences.activePresetId)
     : null;
@@ -1392,8 +1533,29 @@ function normalizePreferences(config: AppConfig, preferences: StoredUserPreferen
     language,
     calendarMode,
     customOptions,
+    futureEstimates,
     reminders,
   };
+}
+
+function normalizeFutureEstimatePreferences(
+  futureEstimates: Partial<FutureEstimatePreferences> | undefined,
+): FutureEstimatePreferences {
+  const defaults = defaultFutureEstimatePreferences();
+
+  return {
+    enabled:
+      typeof futureEstimates?.enabled === "boolean"
+        ? futureEstimates.enabled
+        : defaults.enabled,
+    months: normalizeFutureEstimateMonths(futureEstimates?.months),
+  };
+}
+
+function normalizeFutureEstimateMonths(months: unknown): number {
+  return typeof months === "number" && Number.isInteger(months) && months >= 1 && months <= 6
+    ? months
+    : defaultFutureEstimatePreferences().months;
 }
 
 function normalizeReminderPreferences(reminders: Partial<ReminderPreferences> | undefined): ReminderPreferences {
