@@ -284,11 +284,9 @@ export function calculateEstimatedFutureVesatot(
     return [];
   }
 
-  const averageIntervalDays = Math.round(
-    intervals.reduce((total, interval) => total + interval, 0) / intervals.length,
-  );
+  const projectedIntervalDays = medianIntervalDays(intervals);
 
-  if (averageIntervalDays <= 0) {
+  if (projectedIntervalDays <= 0) {
     return [];
   }
 
@@ -301,7 +299,7 @@ export function calculateEstimatedFutureVesatot(
   for (let cycleIndex = 1; cycleIndex <= 12; cycleIndex += 1) {
     const projectedEntry: PeriodEntry = {
       id: `estimated-period-${cycleIndex}`,
-      date: addDaysToDateOnly(previousProjectedEntry.date, averageIntervalDays),
+      date: addDaysToDateOnly(previousProjectedEntry.date, projectedIntervalDays),
       onah: lastConfirmedEntry.onah,
     };
 
@@ -321,10 +319,10 @@ export function calculateEstimatedFutureVesatot(
         id: `estimated:${cycleIndex}:${veset.id}`,
         description:
           language === "he"
-            ? `${veset.description} - משוער לפי אורך מחזור ממוצע של ${averageIntervalDays} ימים`
-            : `${veset.description} - estimated from your ${averageIntervalDays}-day average cycle`,
+            ? `${veset.description} - משוער לפי אורך מחזור טיפוסי של ${projectedIntervalDays} ימים`
+            : `${veset.description} - estimated from your typical ${projectedIntervalDays}-day cycle`,
         sourceEntryId: lastConfirmedEntry.id,
-        sourceRule: `estimated-average:${cycleIndex}:${veset.sourceRule}`,
+        sourceRule: `estimated-median:${cycleIndex}:${veset.sourceRule}`,
         estimated: true,
         estimatedCycleIndex: cycleIndex,
       });
@@ -334,6 +332,17 @@ export function calculateEstimatedFutureVesatot(
   }
 
   return sortVesatot(dedupeVesatot(projectedVesatot));
+}
+
+function medianIntervalDays(intervals: number[]): number {
+  const sorted = [...intervals].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+
+  if (sorted.length % 2 === 1) {
+    return sorted[middle];
+  }
+
+  return Math.round((sorted[middle - 1] + sorted[middle]) / 2);
 }
 
 function sortVesatot(vesatot: CalculatedVeset[]): CalculatedVeset[] {

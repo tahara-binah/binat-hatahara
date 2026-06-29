@@ -179,20 +179,35 @@ describe("calculateVesatot", () => {
     expect(results).toEqual([]);
   });
 
-  it("estimates six months ahead from the average interval across all entries", () => {
+  it("estimates six months ahead from the median interval across all entries", () => {
     const entries: PeriodEntry[] = [
       { id: "a", date: "2026-01-01", onah: "day" },
       { id: "b", date: "2026-01-29", onah: "day" },
       { id: "c", date: "2026-02-28", onah: "day" },
+      { id: "d", date: "2026-03-28", onah: "day" },
     ];
 
     const results = calculateEstimatedFutureVesatot(entries, standard, "en");
 
     expect(results.length).toBeGreaterThan(0);
     expect(results.every((result) => result.estimated)).toBe(true);
-    expect(results.every((result) => result.date <= "2026-08-28")).toBe(true);
-    expect(results.some((result) => result.description.includes("29-day average"))).toBe(true);
-    expect(results.some((result) => result.sourceRule.startsWith("estimated-average:1:"))).toBe(true);
+    expect(results.every((result) => result.date <= "2026-09-28")).toBe(true);
+    expect(results.some((result) => result.description.includes("28-day cycle"))).toBe(true);
+    expect(results.some((result) => result.sourceRule.startsWith("estimated-median:1:"))).toBe(true);
+  });
+
+  it("uses the median interval instead of letting one long cycle pull projections upward", () => {
+    const entries: PeriodEntry[] = [
+      { id: "a", date: "2026-03-19", onah: "day" },
+      { id: "b", date: "2026-04-22", onah: "day" },
+      { id: "c", date: "2026-05-20", onah: "day" },
+      { id: "d", date: "2026-06-16", onah: "day" },
+    ];
+
+    const results = calculateEstimatedFutureVesatot(entries, standard, "en", 2);
+
+    expect(results.some((result) => result.description.includes("28-day cycle"))).toBe(true);
+    expect(results.some((result) => result.description.includes("30-day"))).toBe(false);
   });
 
   it("recalculates estimated dates after a new confirmed period entry is added", () => {
