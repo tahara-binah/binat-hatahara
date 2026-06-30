@@ -191,7 +191,7 @@ describe("calculateVesatot", () => {
 
     expect(results.length).toBeGreaterThan(0);
     expect(results.every((result) => result.estimated)).toBe(true);
-    expect(results.every((result) => result.date <= "2026-10-26")).toBe(true);
+    expect(results.some((result) => result.date > "2026-10-26")).toBe(true);
     expect(results.some((result) => result.description.includes("28-day cycle"))).toBe(true);
     expect(results.some((result) => result.sourceRule.startsWith("estimated-median:1:"))).toBe(true);
   });
@@ -227,7 +227,25 @@ describe("calculateVesatot", () => {
 
     expect(results.length).toBeGreaterThan(0);
     expect(results.every((result) => result.date > latestConfirmed)).toBe(true);
-    expect(results.every((result) => result.date <= "2026-08-14")).toBe(true);
+    expect(results.some((result) => result.date > "2026-08-14")).toBe(true);
+  });
+
+  it("does not cut off individual dates from the final estimated cycle", () => {
+    const entries: PeriodEntry[] = [
+      { id: "a", date: "2026-03-19", onah: "day" },
+      { id: "b", date: "2026-04-22", onah: "day" },
+      { id: "c", date: "2026-05-20", onah: "day" },
+      { id: "d", date: "2026-06-16", onah: "day" },
+    ];
+
+    const results = calculateEstimatedFutureVesatot(entries, standard, "en", 6);
+    const cycleFive = results.filter((result) => result.estimatedCycleIndex === 5);
+
+    expect(cycleFive.map((result) => result.type).sort()).toEqual([
+      "Haflagah",
+      "Onah Beinonit",
+      "Yom HaChodesh",
+    ]);
   });
 
   it("estimates Yom HaChodesh from the typical recent Hebrew day", () => {

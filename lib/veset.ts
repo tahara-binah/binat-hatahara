@@ -313,7 +313,7 @@ export function calculateEstimatedFutureVesatot(
     projectedEntries.push(projectedEntry);
 
     for (const veset of calculateVesatot(projectedEntries, preset, language, { includeFixedVeset: false })) {
-      if (veset.date <= estimateStartDate || veset.date > horizon) {
+      if (veset.date <= estimateStartDate) {
         continue;
       }
 
@@ -322,7 +322,7 @@ export function calculateEstimatedFutureVesatot(
           ? adjustEstimatedYomHaChodesh(veset, projectedEntry, typicalHebrewDay, language)
           : veset;
 
-      if (adjustedVeset.date <= estimateStartDate || adjustedVeset.date > horizon) {
+      if (adjustedVeset.date <= estimateStartDate) {
         continue;
       }
 
