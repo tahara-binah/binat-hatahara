@@ -22,6 +22,15 @@ The public app does not send period entries, preferences, reminders, estimated-d
 
 Supabase is used by the hosted app only for app configuration and admin publishing metadata. Self-hosters should create their own Supabase project and provide their own environment variables.
 
+## Repository And Hosting
+
+- GitHub: `https://github.com/tahara-binah/binat-hatahara`
+- Tahara Vercel project: `tahara/binat-hatahara`
+- Tahara-hosted app: `https://binat-hatahara-tahara.vercel.app`
+
+The custom domain `https://tahara.binah-ai.com` currently remains attached to the
+original Vercel domain owner because `binah-ai.com` also serves other personal apps.
+
 ## App Structure
 
 Important files:

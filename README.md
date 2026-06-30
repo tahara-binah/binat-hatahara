@@ -4,7 +4,10 @@ Binat Hatahara is an open-source, privacy-first taharah calendar app built with 
 
 The public app runs at `/`. It lets users enter and calculate period-related dates in the browser, while an owner-only admin panel at `/admin` manages the published configuration used by the hosted app.
 
-Live app: https://tahara.binah-ai.com
+Tahara-hosted app: https://binat-hatahara-tahara.vercel.app
+
+Custom domain note: `https://tahara.binah-ai.com` currently remains attached to the
+original Vercel domain owner because `binah-ai.com` also serves other personal apps.
 
 This app is intended as a private planning and reminder tool. It is not a substitute for personal halachic guidance.
 
