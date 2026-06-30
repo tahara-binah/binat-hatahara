@@ -434,6 +434,10 @@ function UpcomingPanel({
   onToggleReminder: (vesetId: string) => void;
 }) {
   const reminderStatus = reminderHeaderStatus(reminders, notificationPermission, language);
+  const estimatedGroups = useMemo(
+    () => groupEstimatedVesatot(estimatedFuture),
+    [estimatedFuture],
+  );
 
   return (
     <div className="space-y-5">
@@ -495,17 +499,32 @@ function UpcomingPanel({
                 <h3 className="text-lg font-bold text-sky-900">
                   {language === "he" ? "תאריכים משוערים" : "Estimated Dates"}
                 </h3>
-                <div className="grid gap-3">
-                  {estimatedFuture.map((veset) => (
-                    <VesetCard
-                      key={veset.id}
-                      config={config}
-                      language={language}
-                      veset={veset}
-                      reminders={reminders}
-                      notificationPermission={notificationPermission}
-                      onToggleReminder={onToggleReminder}
-                    />
+                <div className="space-y-4">
+                  {estimatedGroups.map((group) => (
+                    <div key={group.key} className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className="h-px flex-1 bg-sky-100" />
+                        <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-bold text-sky-800">
+                          {language === "he"
+                            ? `מחזור משוער ${group.label}`
+                            : `Estimated cycle ${group.label}`}
+                        </span>
+                        <span className="h-px flex-1 bg-sky-100" />
+                      </div>
+                      <div className="grid gap-3">
+                        {group.items.map((veset) => (
+                          <VesetCard
+                            key={veset.id}
+                            config={config}
+                            language={language}
+                            veset={veset}
+                            reminders={reminders}
+                            notificationPermission={notificationPermission}
+                            onToggleReminder={onToggleReminder}
+                          />
+                        ))}
+                      </div>
+                    </div>
                   ))}
                 </div>
               </section>
@@ -1523,6 +1542,25 @@ function sortDisplayVesatot(vesatot: CalculatedVeset[]): CalculatedVeset[] {
 
     return a.onah === b.onah ? a.type.localeCompare(b.type) : a.onah === "day" ? -1 : 1;
   });
+}
+
+function groupEstimatedVesatot(
+  vesatot: CalculatedVeset[],
+): Array<{ key: string; label: string; items: CalculatedVeset[] }> {
+  const groups = new Map<string, CalculatedVeset[]>();
+
+  for (const veset of vesatot) {
+    const key = String(veset.estimatedCycleIndex ?? "other");
+    groups.set(key, [...(groups.get(key) || []), veset]);
+  }
+
+  return Array.from(groups.entries())
+    .sort(([a], [b]) => Number(a) - Number(b))
+    .map(([key, items], index) => ({
+      key,
+      label: key === "other" ? String(index + 1) : key,
+      items: sortDisplayVesatot(items),
+    }));
 }
 
 function formatUpcomingDate(date: DateOnly, language: Language): string {
