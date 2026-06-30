@@ -26,10 +26,11 @@ Supabase is used by the hosted app only for app configuration and admin publishi
 
 - GitHub: `https://github.com/tahara-binah/binat-hatahara`
 - Tahara Vercel project: `tahara/binat-hatahara`
-- Tahara-hosted app: `https://binat-hatahara-tahara.vercel.app`
+- Live app: `https://binah-ai.online`
+- Vercel fallback app: `https://binat-hatahara-tahara.vercel.app`
 
-The custom domain `https://tahara.binah-ai.com` currently remains attached to the
-original Vercel domain owner because `binah-ai.com` also serves other personal apps.
+The old personal-domain alias `https://tahara.binah-ai.com` was removed from the
+personal Vercel account after the Tahara-owned `binah-ai.online` domain went live.
 
 ## App Structure
 
