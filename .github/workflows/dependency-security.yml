@@ -1,0 +1,46 @@
+name: Dependency Security Review
+
+on:
+  push:
+    paths:
+      - package.json
+      - package-lock.json
+      - .github/dependabot.yml
+      - .github/workflows/dependency-security.yml
+  pull_request:
+    paths:
+      - package.json
+      - package-lock.json
+      - .github/dependabot.yml
+      - .github/workflows/dependency-security.yml
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependency-security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    name: Audit dependency lockfile
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Audit production dependencies
+        run: npm audit --package-lock-only --omit=dev --audit-level=high
+
+      - name: Report development dependency findings
+        continue-on-error: true
+        run: npm audit --package-lock-only --audit-level=high
